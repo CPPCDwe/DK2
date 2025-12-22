@@ -2368,11 +2368,25 @@ function MagicTulevo:CreateWindow(config)
     
     local SidePanel, ContentPanel, Divider
     
+    -- Panel state (consolidated to reduce local variables) - declared before ApplyTheme
+    local PanelState = {
+        SettingsOpen = false,
+        InfoOpen = false,
+        ConfigsOpen = false,
+        AccountOpen = false,
+        SettingsTabContent = nil,
+        InfoTabContent = nil,
+        ConfigsTabContent = nil,
+        AccountTabContent = nil,
+        AccountPanel = nil
+    }
+    
     ApplyTheme = function(themeData)
         for key, value in pairs(themeData.Colors) do
             Theme[key] = value
         end
         
+        -- Main window
         Main.BackgroundColor3 = Theme.Background
         MainStroke.Color = Theme.Border
         if SidePanel then SidePanel.BackgroundColor3 = Theme.Secondary end
@@ -2381,20 +2395,57 @@ function MagicTulevo:CreateWindow(config)
         SubTitleLabel.TextColor3 = Theme.TextMuted
         if Divider then Divider.BackgroundColor3 = Theme.Border end
         
+        -- Header buttons
         UI.SearchBtn.BackgroundColor3 = Theme.Card
         UI.SettingsBtn.BackgroundColor3 = Theme.Card
         UI.CloseBtn.BackgroundColor3 = Theme.Card
+        UI.ConfigsBtn.BackgroundColor3 = Theme.Card
+        UI.InfoBtn.BackgroundColor3 = Theme.Card
+        
+        -- Header button icons
         UI.SearchIcon.ImageColor3 = Theme.TextMuted
         UI.GearIcon.ImageColor3 = Theme.TextMuted
+        UI.ConfigsIcon.ImageColor3 = Theme.TextMuted
+        UI.InfoIcon.TextColor3 = Theme.TextMuted
         UI.CloseBtn.TextColor3 = Theme.TextMuted
+        
+        -- Header button strokes
+        local searchBtnStroke = UI.SearchBtn:FindFirstChildOfClass("UIStroke")
+        local settingsBtnStroke = UI.SettingsBtn:FindFirstChildOfClass("UIStroke")
+        local closeBtnStroke = UI.CloseBtn:FindFirstChildOfClass("UIStroke")
+        local configsBtnStroke = UI.ConfigsBtn:FindFirstChildOfClass("UIStroke")
+        local infoBtnStroke = UI.InfoBtn:FindFirstChildOfClass("UIStroke")
+        if searchBtnStroke then searchBtnStroke.Color = Theme.Border end
+        if settingsBtnStroke then settingsBtnStroke.Color = Theme.Border end
+        if closeBtnStroke then closeBtnStroke.Color = Theme.Border end
+        if configsBtnStroke then configsBtnStroke.Color = Theme.Border end
+        if infoBtnStroke then infoBtnStroke.Color = Theme.Border end
+        
+        -- Tooltips
         UI.SearchTooltip.BackgroundColor3 = Theme.Secondary
         UI.SettingsTooltip.BackgroundColor3 = Theme.Secondary
+        UI.ConfigsTooltip.BackgroundColor3 = Theme.Secondary
+        UI.InfoTooltip.BackgroundColor3 = Theme.Secondary
+        
+        -- Tooltip strokes (accent color)
+        local searchTooltipStroke = UI.SearchTooltip:FindFirstChildOfClass("UIStroke")
+        local settingsTooltipStroke = UI.SettingsTooltip:FindFirstChildOfClass("UIStroke")
+        local configsTooltipStroke = UI.ConfigsTooltip:FindFirstChildOfClass("UIStroke")
+        local infoTooltipStroke = UI.InfoTooltip:FindFirstChildOfClass("UIStroke")
+        if searchTooltipStroke then searchTooltipStroke.Color = Theme.Accent end
+        if settingsTooltipStroke then settingsTooltipStroke.Color = Theme.Accent end
+        if configsTooltipStroke then configsTooltipStroke.Color = Theme.Accent end
+        if infoTooltipStroke then infoTooltipStroke.Color = Theme.Accent end
+        
+        -- Search panel
         UI.SearchPanel.BackgroundColor3 = Theme.Secondary
         UI.SearchInputContainer.BackgroundColor3 = Theme.Card
         UI.SearchInput.TextColor3 = Theme.Text
         UI.SearchInput.PlaceholderColor3 = Theme.TextMuted
         UI.SearchCounter.TextColor3 = Theme.TextMuted
         UI.SearchResults.ScrollBarImageColor3 = Theme.Accent
+        if UI.SearchPanelStroke then UI.SearchPanelStroke.Color = Theme.Accent end
+        if UI.SearchInputStroke then UI.SearchInputStroke.Color = Theme.Accent end
         
         -- Update all UI elements (buttons, toggles, sliders, etc.) backgrounds
         for _, element in pairs(Window.AllElements) do
@@ -2416,6 +2467,15 @@ function MagicTulevo:CreateWindow(config)
                             Tween(child, 0.3, {TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, BackgroundColor3 = Theme.Background})
                         end
                     end
+                end
+                -- Update toggle fills and slider fills with accent color
+                if element.Type == "Toggle" and element.Fill then
+                    if element.Value then
+                        Tween(element.Fill, 0.3, {BackgroundColor3 = Theme.Accent})
+                    end
+                end
+                if element.Type == "Slider" and element.Fill then
+                    Tween(element.Fill, 0.3, {BackgroundColor3 = Theme.Accent})
                 end
             end
         end
@@ -2439,6 +2499,165 @@ function MagicTulevo:CreateWindow(config)
             end
         end
         
+        -- Update PanelState elements if they exist
+        if PanelState then
+            -- Account Panel
+            if PanelState.AccountPanel then
+                PanelState.AccountPanel.BackgroundColor3 = Theme.Card
+                local accStroke = PanelState.AccountPanel:FindFirstChildOfClass("UIStroke")
+                if accStroke then accStroke.Color = Theme.Accent end
+            end
+            
+            -- Settings Tab Content
+            if PanelState.SettingsTabContent then
+                PanelState.SettingsTabContent.ScrollBarImageColor3 = Theme.Accent
+                for _, child in pairs(PanelState.SettingsTabContent:GetDescendants()) do
+                    if child:IsA("Frame") and child.BackgroundTransparency < 1 then
+                        if child.Name ~= "ThemeCard" then
+                            Tween(child, 0.3, {BackgroundColor3 = Theme.Card})
+                        end
+                    end
+                    if child:IsA("UIStroke") then
+                        if child.Color == Theme.Border or child.Transparency > 0.3 then
+                            Tween(child, 0.3, {Color = Theme.Border})
+                        else
+                            Tween(child, 0.3, {Color = Theme.Accent})
+                        end
+                    end
+                    if child:IsA("TextLabel") then
+                        if child.TextColor3 ~= Color3.new(1,1,1) then
+                            Tween(child, 0.3, {TextColor3 = Theme.Text})
+                        end
+                    end
+                end
+            end
+            
+            -- Info Tab Content
+            if PanelState.InfoTabContent then
+                PanelState.InfoTabContent.ScrollBarImageColor3 = Theme.Accent
+                for _, child in pairs(PanelState.InfoTabContent:GetDescendants()) do
+                    if child:IsA("Frame") and child.BackgroundTransparency < 1 then
+                        Tween(child, 0.3, {BackgroundColor3 = Theme.Card})
+                    end
+                    if child:IsA("UIStroke") then
+                        Tween(child, 0.3, {Color = Theme.Accent})
+                    end
+                    if child:IsA("TextLabel") and child.TextColor3 ~= Color3.new(1,1,1) then
+                        Tween(child, 0.3, {TextColor3 = Theme.Text})
+                    end
+                end
+            end
+            
+            -- Account Tab Content
+            if PanelState.AccountTabContent then
+                PanelState.AccountTabContent.ScrollBarImageColor3 = Theme.Accent
+                for _, child in pairs(PanelState.AccountTabContent:GetDescendants()) do
+                    if child:IsA("Frame") and child.BackgroundTransparency < 1 then
+                        Tween(child, 0.3, {BackgroundColor3 = Theme.Card})
+                    end
+                    if child:IsA("UIStroke") then
+                        Tween(child, 0.3, {Color = Theme.Accent})
+                    end
+                    if child:IsA("TextLabel") and child.TextColor3 ~= Color3.new(1,1,1) then
+                        Tween(child, 0.3, {TextColor3 = Theme.Text})
+                    end
+                    if child:IsA("ImageLabel") and child.ImageColor3 == Theme.Accent then
+                        Tween(child, 0.3, {ImageColor3 = Theme.Accent})
+                    end
+                end
+            end
+        end
+        
+        -- Update specific Account Tab elements
+        if UI.ProfileHeaderStroke then
+            UI.ProfileHeaderStroke.Color = Theme.Accent
+        end
+        if UI.AvatarRingStroke then
+            UI.AvatarRingStroke.Color = Theme.Accent
+        end
+        if UI.AgeBadge then
+            UI.AgeBadge.BackgroundColor3 = Theme.Accent
+        end
+        if UI.AgeBadgeGradient then
+            UI.AgeBadgeGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(1, Theme.AccentGlow or Theme.Accent)
+            })
+        end
+        if UI.ProfileGradientBg then
+            UI.ProfileGradientBg.BackgroundColor3 = Theme.Accent
+        end
+        if UI.ProfileGradientBgGradient then
+            UI.ProfileGradientBgGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(0.5, Theme.AccentGlow or Theme.Accent),
+                ColorSequenceKeypoint.new(1, Theme.Accent)
+            })
+        end
+        
+        -- Update small Account Panel elements
+        if UI.AccountPanelStroke then
+            UI.AccountPanelStroke.Color = Theme.Accent
+        end
+        if UI.AccountPanelGradientUI then
+            UI.AccountPanelGradientUI.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(1, Theme.AccentGlow or Theme.Accent)
+            })
+        end
+        if UI.AvatarRingSmallStroke then
+            UI.AvatarRingSmallStroke.Color = Theme.Accent
+        end
+        
+        -- Update Info Tab elements
+        if UI.HeaderAccentLine then
+            UI.HeaderAccentLine.BackgroundColor3 = Theme.Accent
+        end
+        if UI.HeaderAccentLineGradient then
+            UI.HeaderAccentLineGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(0.5, Theme.AccentGlow or Theme.Accent),
+                ColorSequenceKeypoint.new(1, Theme.Accent)
+            })
+        end
+        if UI.InfoIconContainer then
+            UI.InfoIconContainer.BackgroundColor3 = Theme.Accent
+        end
+        if UI.HeaderGradientBg then
+            UI.HeaderGradientBg.BackgroundColor3 = Theme.Accent
+        end
+        if UI.HeaderGradient then
+            UI.HeaderGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(0.25, Theme.AccentGlow or Theme.Accent),
+                ColorSequenceKeypoint.new(0.5, Theme.Accent),
+                ColorSequenceKeypoint.new(0.75, Theme.AccentGlow or Theme.Accent),
+                ColorSequenceKeypoint.new(1, Theme.Accent)
+            })
+        end
+        if UI.InfoIconGlow then
+            UI.InfoIconGlow.ImageColor3 = Theme.Accent
+        end
+        if UI.InfoIconContainerGradient then
+            UI.InfoIconContainerGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(0.5, Theme.AccentGlow or Theme.Accent),
+                ColorSequenceKeypoint.new(1, Theme.Accent)
+            })
+        end
+        
+        -- Update Copy HWID Button
+        if UI.CopyHwidBtn then
+            UI.CopyHwidBtn.BackgroundColor3 = Theme.Accent
+        end
+        if UI.CopyHwidBtnGradient then
+            UI.CopyHwidBtnGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(1, Theme.AccentGlow or Theme.Accent)
+            })
+        end
+        
+        -- Update gradients
         if themeData.IsGradient and themeData.GradientColors then
             local keypoints = {}
             for i, color in ipairs(themeData.GradientColors) do
@@ -2459,26 +2678,13 @@ function MagicTulevo:CreateWindow(config)
             })
         end
         
-        MagicTulevo:Notify({Title = "Theme Changed", Message = "Applied: " .. themeData.Name, Type = "Success", Duration = 2})
+        MagicTulevo:Notify({Title = "Тема изменена", Message = "Применена: " .. themeData.Name, Type = "Success", Duration = 2})
         
         -- Call all registered theme change callbacks
         for _, callback in ipairs(MagicTulevo.OnThemeChangeCallbacks) do
             pcall(callback, Theme.Accent, Theme)
         end
     end
-
-    -- Panel state (consolidated to reduce local variables)
-    local PanelState = {
-        SettingsOpen = false,
-        InfoOpen = false,
-        ConfigsOpen = false,
-        AccountOpen = false,
-        SettingsTabContent = nil,
-        InfoTabContent = nil,
-        ConfigsTabContent = nil,
-        AccountTabContent = nil,
-        AccountPanel = nil
-    }
 
     -- Configs Button Click Handler
     UI.ConfigsBtn.MouseButton1Click:Connect(function()
@@ -2651,6 +2857,7 @@ function MagicTulevo:CreateWindow(config)
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = PanelState.AccountPanel})
     local AccountPanelStroke = Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.6, Parent = PanelState.AccountPanel})
+    UI.AccountPanelStroke = AccountPanelStroke
     
     -- Subtle gradient overlay
     local AccountPanelGradient = Create("Frame", {
@@ -2659,7 +2866,7 @@ function MagicTulevo:CreateWindow(config)
         Parent = PanelState.AccountPanel
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = AccountPanelGradient})
-    Create("UIGradient", {
+    local AccountPanelGradientUI = Create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Theme.Accent),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(147, 112, 219))
@@ -2667,6 +2874,8 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 45,
         Parent = AccountPanelGradient
     })
+    UI.AccountPanelGradient = AccountPanelGradient
+    UI.AccountPanelGradientUI = AccountPanelGradientUI
     
     local player = game:GetService("Players").LocalPlayer
     local playerName = player and player.Name or "Unknown"
@@ -2705,12 +2914,14 @@ function MagicTulevo:CreateWindow(config)
         Parent = AvatarContainer
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = AvatarRingSmall})
-    Create("UIStroke", {
+    local AvatarRingSmallStroke = Create("UIStroke", {
         Color = Theme.Accent,
         Thickness = 2,
         Transparency = 0.3,
         Parent = AvatarRingSmall
     })
+    UI.AvatarRingSmall = AvatarRingSmall
+    UI.AvatarRingSmallStroke = AvatarRingSmallStroke
     
     -- Avatar thumbnail
     local AvatarHolder = Create("Frame", {
@@ -3353,7 +3564,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = PanelState.AccountTabContent
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = ProfileHeaderFrame})
-    Create("UIStroke", {Color = Theme.Accent, Thickness = 1.5, Transparency = 0.4, Parent = ProfileHeaderFrame})
+    local ProfileHeaderStroke = Create("UIStroke", {Color = Theme.Accent, Thickness = 1.5, Transparency = 0.4, Parent = ProfileHeaderFrame})
+    UI.ProfileHeaderStroke = ProfileHeaderStroke
     
     -- Gradient background
     local ProfileGradientBg = Create("Frame", {
@@ -3363,7 +3575,7 @@ function MagicTulevo:CreateWindow(config)
         Position = UDim2.new(-0.5, 0, -0.5, 0),
         Parent = ProfileHeaderFrame
     })
-    Create("UIGradient", {
+    local ProfileGradientBgGradient = Create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Theme.Accent),
             ColorSequenceKeypoint.new(0.5, Color3.fromRGB(147, 112, 219)),
@@ -3372,6 +3584,7 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 45,
         Parent = ProfileGradientBg
     })
+    UI.ProfileGradientBgGradient = ProfileGradientBgGradient
     
     -- Compact avatar with ring
     local AvatarContainer = Create("Frame", {
@@ -3387,7 +3600,13 @@ function MagicTulevo:CreateWindow(config)
         Parent = AvatarContainer
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = AvatarRing})
-    Create("UIStroke", {Color = Theme.Accent, Thickness = 2.5, Parent = AvatarRing})
+    local AvatarRingStroke = Create("UIStroke", {Color = Theme.Accent, Thickness = 2.5, Parent = AvatarRing})
+    
+    -- Store references for theme updates
+    UI.ProfileHeaderFrame = ProfileHeaderFrame
+    UI.AvatarRing = AvatarRing
+    UI.AvatarRingStroke = AvatarRingStroke
+    UI.ProfileGradientBg = ProfileGradientBg
     
     local AvatarHolder = Create("Frame", {
         BackgroundColor3 = Theme.Secondary,
@@ -3452,7 +3671,7 @@ function MagicTulevo:CreateWindow(config)
         Parent = UserInfoContainer
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = AgeBadge})
-    Create("UIGradient", {
+    local AgeBadgeGradient = Create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Theme.Accent),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(147, 112, 219))
@@ -3460,6 +3679,8 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 90,
         Parent = AgeBadge
     })
+    UI.AgeBadge = AgeBadge
+    UI.AgeBadgeGradient = AgeBadgeGradient
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
@@ -3557,7 +3778,7 @@ function MagicTulevo:CreateWindow(config)
         Parent = PanelState.AccountTabContent
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = CopyHwidBtn})
-    Create("UIGradient", {
+    local CopyHwidBtnGradient = Create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Theme.Accent),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(147, 112, 219))
@@ -3565,6 +3786,8 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 90,
         Parent = CopyHwidBtn
     })
+    UI.CopyHwidBtn = CopyHwidBtn
+    UI.CopyHwidBtnGradient = CopyHwidBtnGradient
     
     CopyHwidBtn.MouseButton1Click:Connect(function()
         if setclipboard then
@@ -3652,7 +3875,7 @@ function MagicTulevo:CreateWindow(config)
         Position = UDim2.new(0, 0, 0, 0),
         Parent = InfoHeaderFrame
     })
-    Create("UIGradient", {
+    local HeaderAccentLineGradient = Create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(99, 102, 241)),
             ColorSequenceKeypoint.new(0.5, Color3.fromRGB(217, 70, 239)),
@@ -3660,6 +3883,11 @@ function MagicTulevo:CreateWindow(config)
         }),
         Parent = HeaderAccentLine
     })
+    UI.HeaderAccentLine = HeaderAccentLine
+    UI.HeaderAccentLineGradient = HeaderAccentLineGradient
+    UI.InfoHeaderFrame = InfoHeaderFrame
+    UI.HeaderGradientBg = HeaderGradientBg
+    UI.HeaderGradient = HeaderGradient
     
     -- Animated icon container with glow
     local InfoIconContainer = Create("Frame", {
@@ -3669,6 +3897,7 @@ function MagicTulevo:CreateWindow(config)
         Parent = InfoHeaderFrame
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = InfoIconContainer})
+    UI.InfoIconContainer = InfoIconContainer
     
     -- Icon glow effect
     local InfoIconGlow = Create("ImageLabel", {
@@ -3684,9 +3913,10 @@ function MagicTulevo:CreateWindow(config)
         ZIndex = 0,
         Parent = InfoIconContainer
     })
+    UI.InfoIconGlow = InfoIconGlow
     
     -- Gradient on icon
-    Create("UIGradient", {
+    local InfoIconContainerGradient = Create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(99, 102, 241)),
             ColorSequenceKeypoint.new(0.5, Color3.fromRGB(217, 70, 239)),
@@ -3695,6 +3925,7 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 45,
         Parent = InfoIconContainer
     })
+    UI.InfoIconContainerGradient = InfoIconContainerGradient
     
     local InfoHeaderIcon = Create("TextLabel", {
         BackgroundTransparency = 1,
@@ -4892,6 +5123,309 @@ function MagicTulevo:CreateWindow(config)
         table.insert(Window.Tabs, Tab)
         if #Window.Tabs == 1 then SelectTab() end
 
+        -- SubTabs system
+        Tab.SubTabs = {}
+        Tab.CurrentSubTab = nil
+        Tab.SubTabContainer = nil
+        Tab.SubTabContent = nil
+        
+        function Tab:CreateSubTab(cfg)
+            cfg = cfg or {}
+            local SubTab = {}
+            local subTabName = cfg.Name or "SubTab"
+            
+            -- Create SubTab container if not exists
+            if not Tab.SubTabContainer then
+                Tab.SubTabContainer = Create("Frame", {
+                    BackgroundColor3 = Theme.Card,
+                    Size = UDim2.new(1, 0, 0, 36),
+                    ClipsDescendants = true,
+                    Parent = TabContent
+                })
+                Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Tab.SubTabContainer})
+                Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Tab.SubTabContainer})
+                
+                local SubTabScroll = Create("ScrollingFrame", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, -8, 1, -8),
+                    Position = UDim2.new(0, 4, 0, 4),
+                    CanvasSize = UDim2.new(0, 0, 0, 0),
+                    ScrollBarThickness = 0,
+                    ScrollingDirection = Enum.ScrollingDirection.X,
+                    BorderSizePixel = 0,
+                    Parent = Tab.SubTabContainer
+                })
+                Tab.SubTabScroll = SubTabScroll
+                
+                local SubTabLayout = Create("UIListLayout", {
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    Padding = UDim.new(0, 6),
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
+                    Parent = SubTabScroll
+                })
+                SubTabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                    SubTabScroll.CanvasSize = UDim2.new(0, SubTabLayout.AbsoluteContentSize.X + 8, 0, 0)
+                end)
+                
+                -- SubTab content container
+                Tab.SubTabContent = Create("Frame", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    ClipsDescendants = true,
+                    Parent = TabContent
+                })
+            end
+            
+            -- Create SubTab button
+            local SubTabBtn = Create("TextButton", {
+                BackgroundColor3 = Theme.Background,
+                BackgroundTransparency = 0.5,
+                Size = UDim2.new(0, 0, 0, 26),
+                AutomaticSize = Enum.AutomaticSize.X,
+                Font = Enum.Font.GothamMedium,
+                Text = "  " .. subTabName .. "  ",
+                TextColor3 = Theme.TextMuted,
+                TextSize = 11,
+                AutoButtonColor = false,
+                LayoutOrder = #Tab.SubTabs + 1,
+                Parent = Tab.SubTabScroll
+            })
+            Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = SubTabBtn})
+            Create("UIPadding", {PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = SubTabBtn})
+            
+            -- SubTab content frame
+            local SubTabContentFrame = Create("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 0),
+                Visible = false,
+                Parent = Tab.SubTabContent
+            })
+            local SubTabContentLayout = Create("UIListLayout", {
+                Padding = UDim.new(0, 6),
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Parent = SubTabContentFrame
+            })
+            SubTabContentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                SubTabContentFrame.Size = UDim2.new(1, 0, 0, SubTabContentLayout.AbsoluteContentSize.Y)
+                -- Update parent container
+                local totalHeight = 0
+                for _, st in pairs(Tab.SubTabs) do
+                    if st.ContentFrame.Visible then
+                        totalHeight = st.ContentFrame.Size.Y.Offset
+                        break
+                    end
+                end
+                Tab.SubTabContent.Size = UDim2.new(1, 0, 0, totalHeight)
+            end)
+            
+            local function SelectSubTab()
+                if Tab.CurrentSubTab == SubTab then return end
+                
+                -- Deselect all subtabs
+                for _, st in pairs(Tab.SubTabs) do
+                    st.ContentFrame.Visible = false
+                    Tween(st.Button, 0.2, {BackgroundColor3 = Theme.Background, BackgroundTransparency = 0.5})
+                    Tween(st.Button, 0.2, {TextColor3 = Theme.TextMuted})
+                end
+                
+                -- Select this subtab
+                Tab.CurrentSubTab = SubTab
+                SubTabContentFrame.Visible = true
+                Tween(SubTabBtn, 0.2, {BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0})
+                Tween(SubTabBtn, 0.2, {TextColor3 = Theme.Text})
+                
+                -- Update container height
+                Tab.SubTabContent.Size = UDim2.new(1, 0, 0, SubTabContentFrame.Size.Y.Offset)
+            end
+            
+            SubTabBtn.MouseButton1Click:Connect(SelectSubTab)
+            SubTabBtn.MouseEnter:Connect(function()
+                if Tab.CurrentSubTab ~= SubTab then
+                    Tween(SubTabBtn, 0.15, {BackgroundTransparency = 0.3})
+                end
+            end)
+            SubTabBtn.MouseLeave:Connect(function()
+                if Tab.CurrentSubTab ~= SubTab then
+                    Tween(SubTabBtn, 0.15, {BackgroundTransparency = 0.5})
+                end
+            end)
+            
+            SubTab.Button = SubTabBtn
+            SubTab.ContentFrame = SubTabContentFrame
+            SubTab.Name = subTabName
+            SubTab.Select = SelectSubTab
+            
+            -- Element creation functions for SubTab
+            function SubTab:CreateSection(cfg)
+                cfg = cfg or {}
+                local Section = Create("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), Parent = SubTabContentFrame})
+                Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0, 4, 0, 0), Font = Enum.Font.GothamBold, Text = (cfg.Name or "Section"):upper(), TextColor3 = Theme.TextDark, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = Section})
+                return Section
+            end
+            
+            function SubTab:CreateLabel(cfg)
+                cfg = cfg or {}
+                local Label = Create("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), Parent = SubTabContentFrame})
+                local LabelText = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Font = Enum.Font.Gotham, Text = cfg.Text or "Label", TextColor3 = Theme.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = Label})
+                local obj = {}
+                function obj:Set(t) LabelText.Text = t end
+                return obj
+            end
+            
+            function SubTab:CreateButton(cfg)
+                cfg = cfg or {}
+                local callback = cfg.Callback or function() end
+                local Button = Create("TextButton", {BackgroundColor3 = Theme.Card, Size = UDim2.new(1, 0, 0, 36), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Button", TextColor3 = Theme.Text, TextSize = 13, AutoButtonColor = false, Parent = SubTabContentFrame})
+                Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Button})
+                Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Button})
+                Button.MouseEnter:Connect(function() Tween(Button, 0.2, {BackgroundColor3 = Theme.CardHover}) end)
+                Button.MouseLeave:Connect(function() Tween(Button, 0.2, {BackgroundColor3 = Theme.Card}) end)
+                Button.MouseButton1Click:Connect(function()
+                    Tween(Button, 0.1, {BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Text})
+                    task.delay(0.15, function() Tween(Button, 0.25, {BackgroundColor3 = Theme.Card, TextColor3 = Theme.Text}) end)
+                    callback()
+                end)
+                return Button
+            end
+            
+            function SubTab:CreateToggle(cfg)
+                cfg = cfg or {}
+                local toggleName = cfg.Name or "Toggle"
+                local default = cfg.Default or false
+                local callback = cfg.Callback or function() end
+                local ToggleObj = {Value = default, Name = toggleName}
+                local Toggle = Create("Frame", {BackgroundColor3 = Theme.Card, Size = UDim2.new(1, 0, 0, 36), Parent = SubTabContentFrame})
+                Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Toggle})
+                Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Toggle})
+                Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -56, 1, 0), Position = UDim2.new(0, 12, 0, 0), Font = Enum.Font.GothamMedium, Text = toggleName, TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = Toggle})
+                local ToggleBg = Create("Frame", {BackgroundColor3 = default and Theme.Accent or Theme.Background, Size = UDim2.new(0, 40, 0, 22), Position = UDim2.new(1, -52, 0.5, -11), Parent = Toggle})
+                Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleBg})
+                local ToggleCircle = Create("Frame", {BackgroundColor3 = Theme.Text, Size = UDim2.new(0, 16, 0, 16), Position = default and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8), Parent = ToggleBg})
+                Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleCircle})
+                local function Update()
+                    if ToggleObj.Value then
+                        Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Accent})
+                        Tween(ToggleCircle, 0.25, {Position = UDim2.new(1, -19, 0.5, -8)}, Enum.EasingStyle.Back)
+                    else
+                        Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Background})
+                        Tween(ToggleCircle, 0.25, {Position = UDim2.new(0, 3, 0.5, -8)}, Enum.EasingStyle.Back)
+                    end
+                    callback(ToggleObj.Value)
+                end
+                ToggleObj.Update = Update
+                local Click = Create("TextButton", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "", Parent = Toggle})
+                Click.MouseButton1Click:Connect(function() ToggleObj.Value = not ToggleObj.Value Update() end)
+                function ToggleObj:Set(v) ToggleObj.Value = v Update() end
+                if default then callback(true) end
+                return ToggleObj
+            end
+            
+            function SubTab:CreateSlider(cfg)
+                cfg = cfg or {}
+                local minVal, maxVal = cfg.Min or 0, cfg.Max or 100
+                local default = cfg.Default or minVal
+                local callback = cfg.Callback or function() end
+                local SliderObj = {Value = default}
+                local Slider = Create("Frame", {BackgroundColor3 = Theme.Card, Size = UDim2.new(1, 0, 0, 50), Parent = SubTabContentFrame})
+                Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Slider})
+                Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Slider})
+                Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -60, 0, 20), Position = UDim2.new(0, 12, 0, 6), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Slider", TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = Slider})
+                local SliderValue = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(0, 50, 0, 20), Position = UDim2.new(1, -58, 0, 6), Font = Enum.Font.GothamBold, Text = tostring(default), TextColor3 = Theme.Accent, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, Parent = Slider})
+                local SliderBar = Create("Frame", {BackgroundColor3 = Theme.Background, Size = UDim2.new(1, -24, 0, 8), Position = UDim2.new(0, 12, 0, 34), Parent = Slider})
+                Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SliderBar})
+                local SliderFill = Create("Frame", {BackgroundColor3 = Theme.Accent, Size = UDim2.new((default - minVal) / (maxVal - minVal), 0, 1, 0), Parent = SliderBar})
+                Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SliderFill})
+                Create("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Theme.AccentDark), ColorSequenceKeypoint.new(1, Theme.Accent)}), Parent = SliderFill})
+                local sliding = false
+                local function UpdateSlider(input)
+                    local pos = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
+                    local value = math.floor(minVal + (maxVal - minVal) * pos)
+                    SliderObj.Value = value
+                    SliderValue.Text = tostring(value)
+                    Tween(SliderFill, 0.08, {Size = UDim2.new(pos, 0, 1, 0)})
+                    callback(value)
+                end
+                SliderBar.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then sliding = true UpdateSlider(input) end end)
+                SliderBar.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end end)
+                UserInputService.InputChanged:Connect(function(input) if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then UpdateSlider(input) end end)
+                function SliderObj:Set(v) local p = (v - minVal) / (maxVal - minVal) SliderObj.Value = v SliderValue.Text = tostring(v) Tween(SliderFill, 0.2, {Size = UDim2.new(p, 0, 1, 0)}) end
+                return SliderObj
+            end
+            
+            function SubTab:CreateDropdown(cfg)
+                cfg = cfg or {}
+                local options = cfg.Options or {}
+                local default = cfg.Default or (options[1] or "")
+                local callback = cfg.Callback or function() end
+                local DropdownObj = {Value = default, Open = false}
+                local Dropdown = Create("Frame", {BackgroundColor3 = Theme.Card, Size = UDim2.new(1, 0, 0, 36), ClipsDescendants = true, Parent = SubTabContentFrame})
+                Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Dropdown})
+                Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Dropdown})
+                Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -90, 0, 36), Position = UDim2.new(0, 12, 0, 0), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Dropdown", TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = Dropdown})
+                local Selected = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(0, 70, 0, 36), Position = UDim2.new(1, -90, 0, 0), Font = Enum.Font.Gotham, Text = default, TextColor3 = Theme.TextMuted, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Parent = Dropdown})
+                local Arrow = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(0, 20, 0, 36), Position = UDim2.new(1, -24, 0, 0), Font = Enum.Font.GothamBold, Text = "▼", TextColor3 = Theme.TextMuted, TextSize = 10, Parent = Dropdown})
+                local DropList = Create("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, -16, 0, 0), Position = UDim2.new(0, 8, 0, 40), Parent = Dropdown})
+                Create("UIListLayout", {Padding = UDim.new(0, 4), Parent = DropList})
+                for _, opt in ipairs(options) do
+                    local OptBtn = Create("TextButton", {BackgroundColor3 = Theme.Background, Size = UDim2.new(1, 0, 0, 28), Font = Enum.Font.Gotham, Text = opt, TextColor3 = Theme.Text, TextSize = 12, AutoButtonColor = false, Parent = DropList})
+                    Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = OptBtn})
+                    OptBtn.MouseEnter:Connect(function() Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.CardHover}) end)
+                    OptBtn.MouseLeave:Connect(function() Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.Background}) end)
+                    OptBtn.MouseButton1Click:Connect(function()
+                        DropdownObj.Value = opt
+                        Selected.Text = opt
+                        DropdownObj.Open = false
+                        Tween(Dropdown, 0.3, {Size = UDim2.new(1, 0, 0, 36)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+                        Tween(Arrow, 0.3, {Rotation = 0})
+                        callback(opt)
+                    end)
+                end
+                local DropClick = Create("TextButton", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 36), Text = "", Parent = Dropdown})
+                DropClick.MouseButton1Click:Connect(function()
+                    DropdownObj.Open = not DropdownObj.Open
+                    if DropdownObj.Open then
+                        Tween(Dropdown, 0.35, {Size = UDim2.new(1, 0, 0, 44 + #options * 32)}, Enum.EasingStyle.Back)
+                        Tween(Arrow, 0.3, {Rotation = 180})
+                    else
+                        Tween(Dropdown, 0.25, {Size = UDim2.new(1, 0, 0, 36)})
+                        Tween(Arrow, 0.25, {Rotation = 0})
+                    end
+                end)
+                function DropdownObj:Set(v) DropdownObj.Value = v Selected.Text = v end
+                function DropdownObj:Refresh(newOptions)
+                    options = newOptions
+                    for _, child in pairs(DropList:GetChildren()) do
+                        if child:IsA("TextButton") then child:Destroy() end
+                    end
+                    for _, opt in ipairs(options) do
+                        local OptBtn = Create("TextButton", {BackgroundColor3 = Theme.Background, Size = UDim2.new(1, 0, 0, 28), Font = Enum.Font.Gotham, Text = opt, TextColor3 = Theme.Text, TextSize = 12, AutoButtonColor = false, Parent = DropList})
+                        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = OptBtn})
+                        OptBtn.MouseEnter:Connect(function() Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.CardHover}) end)
+                        OptBtn.MouseLeave:Connect(function() Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.Background}) end)
+                        OptBtn.MouseButton1Click:Connect(function()
+                            DropdownObj.Value = opt
+                            Selected.Text = opt
+                            DropdownObj.Open = false
+                            Tween(Dropdown, 0.3, {Size = UDim2.new(1, 0, 0, 36)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+                            Tween(Arrow, 0.3, {Rotation = 0})
+                            callback(opt)
+                        end)
+                    end
+                end
+                return DropdownObj
+            end
+            
+            table.insert(Tab.SubTabs, SubTab)
+            
+            -- Auto-select first subtab
+            if #Tab.SubTabs == 1 then
+                SelectSubTab()
+            end
+            
+            return SubTab
+        end
+        
         function Tab:CreateSection(cfg)
             cfg = cfg or {}
             local Section = Create("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), Parent = TabContent})
