@@ -14,6 +14,163 @@ local MagicTulevo = {}
 MagicTulevo.ToggleKey = Enum.KeyCode.K
 MagicTulevo.OnThemeChangeCallbacks = {}
 
+-- ═══════════════════════════════════════════════════════════════
+-- OPTIMIZATION: Cached TweenInfo objects (avoid creating new ones)
+-- ═══════════════════════════════════════════════════════════════
+local TweenInfoCache = {
+    Fast = TweenInfo.new(0.1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Normal = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Smooth = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Slow = TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Back = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    BackIn = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+    Linear = TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+    Elastic = TweenInfo.new(0.4, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
+}
+
+-- Custom TweenInfo cache for specific durations
+local CustomTweenCache = {}
+local function GetCachedTweenInfo(duration, style, direction)
+    style = style or Enum.EasingStyle.Quint
+    direction = direction or Enum.EasingDirection.Out
+    local key = duration .. "_" .. style.Name .. "_" .. direction.Name
+    if not CustomTweenCache[key] then
+        CustomTweenCache[key] = TweenInfo.new(duration, style, direction)
+    end
+    return CustomTweenCache[key]
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- OPTIMIZATION: Consolidated Animation Loop (single RenderStepped)
+-- ═══════════════════════════════════════════════════════════════
+local AnimationQueue = {
+    GradientOffsets = {},  -- {gradient = {offset = 0, speed = 0.3}}
+    Rotations = {},        -- {object = {rotation = 0, speed = 45}}
+    Active = false
+}
+
+local function RegisterGradientAnimation(gradient, speed)
+    AnimationQueue.GradientOffsets[gradient] = {offset = math.random(), speed = speed or 0.3}
+end
+
+local function UnregisterGradientAnimation(gradient)
+    AnimationQueue.GradientOffsets[gradient] = nil
+end
+
+local function RegisterRotationAnimation(object, speed)
+    AnimationQueue.Rotations[object] = {rotation = 0, speed = speed or 45}
+end
+
+local function UnregisterRotationAnimation(object)
+    AnimationQueue.Rotations[object] = nil
+end
+
+local MainAnimationConnection = nil
+local function StartAnimationLoop()
+    if AnimationQueue.Active then return end
+    AnimationQueue.Active = true
+    
+    MainAnimationConnection = RunService.RenderStepped:Connect(function(dt)
+        -- Update all gradient offsets
+        for gradient, data in pairs(AnimationQueue.GradientOffsets) do
+            if gradient and gradient.Parent then
+                data.offset = (data.offset + dt * data.speed) % 1
+                gradient.Offset = Vector2.new(data.offset, 0)
+            else
+                AnimationQueue.GradientOffsets[gradient] = nil
+            end
+        end
+        
+        -- Update all rotations
+        for object, data in pairs(AnimationQueue.Rotations) do
+            if object and object.Parent then
+                data.rotation = (data.rotation + dt * data.speed) % 360
+                object.Rotation = data.rotation
+            else
+                AnimationQueue.Rotations[object] = nil
+            end
+        end
+    end)
+end
+
+local function StopAnimationLoop()
+    if MainAnimationConnection then
+        MainAnimationConnection:Disconnect()
+        MainAnimationConnection = nil
+    end
+    AnimationQueue.Active = false
+    AnimationQueue.GradientOffsets = {}
+    AnimationQueue.Rotations = {}
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- OPTIMIZATION: Throttle/Debounce utility
+-- ═══════════════════════════════════════════════════════════════
+local function Debounce(func, delay)
+    local lastCall = 0
+    local scheduled = false
+    return function(...)
+        local args = {...}
+        local now = tick()
+        if now - lastCall >= delay then
+            lastCall = now
+            func(unpack(args))
+        elseif not scheduled then
+            scheduled = true
+            task.delay(delay - (now - lastCall), function()
+                scheduled = false
+                lastCall = tick()
+                func(unpack(args))
+            end)
+        end
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- OPTIMIZATION: Object Pool for reusable UI elements
+-- ═══════════════════════════════════════════════════════════════
+local ObjectPool = {
+    Frames = {},
+    TextLabels = {},
+    TextButtons = {},
+    ImageLabels = {},
+}
+
+local function GetPooledObject(className, props)
+    local pool = ObjectPool[className .. "s"]
+    local obj
+    if pool and #pool > 0 then
+        obj = table.remove(pool)
+        obj.Visible = true
+        obj.Parent = nil
+    else
+        obj = Instance.new(className)
+    end
+    for k, v in pairs(props) do
+        if k ~= "Parent" then obj[k] = v end
+    end
+    if props.Parent then obj.Parent = props.Parent end
+    return obj
+end
+
+local function ReturnToPool(obj)
+    local className = obj.ClassName
+    local pool = ObjectPool[className .. "s"]
+    if pool and #pool < 50 then -- Max 50 per type
+        obj.Visible = false
+        obj.Parent = nil
+        -- Clear children except UICorner/UIStroke
+        for _, child in pairs(obj:GetChildren()) do
+            if not child:IsA("UICorner") and not child:IsA("UIStroke") then
+                child:Destroy()
+            end
+        end
+        table.insert(pool, obj)
+    else
+        obj:Destroy()
+    end
+end
+
 MagicTulevo.Theme = {
     Background = Color3.fromRGB(13, 13, 18),
     Secondary = Color3.fromRGB(18, 18, 25),
@@ -47,6 +204,7 @@ local function PlaySound(id, vol)
     s.Ended:Connect(function() s:Destroy() end)
 end
 
+-- OPTIMIZED: Create function with property batching
 local function Create(class, props)
     local inst = Instance.new(class)
     for k, v in pairs(props) do
@@ -56,8 +214,24 @@ local function Create(class, props)
     return inst
 end
 
+-- OPTIMIZED: Tween function using cached TweenInfo
 local function Tween(obj, t, props, style, dir)
-    local tw = TweenService:Create(obj, TweenInfo.new(t, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props)
+    local tweenInfo
+    -- Use cached TweenInfo when possible
+    if not style and not dir then
+        if t <= 0.1 then
+            tweenInfo = TweenInfoCache.Fast
+        elseif t <= 0.2 then
+            tweenInfo = TweenInfoCache.Normal
+        elseif t <= 0.35 then
+            tweenInfo = TweenInfoCache.Smooth
+        else
+            tweenInfo = TweenInfoCache.Slow
+        end
+    else
+        tweenInfo = GetCachedTweenInfo(t, style, dir)
+    end
+    local tw = TweenService:Create(obj, tweenInfo, props)
     tw:Play()
     return tw
 end
@@ -472,11 +646,9 @@ function MagicTulevo:CreateWindow(config)
         }),
         Parent = AccentTop
     })
-    local accentOffset = 0
-    RunService.RenderStepped:Connect(function(dt)
-        accentOffset = (accentOffset + dt * 0.3) % 1
-        AccentGradient.Offset = Vector2.new(accentOffset, 0)
-    end)
+    -- OPTIMIZED: Use consolidated animation loop instead of individual connection
+    RegisterGradientAnimation(AccentGradient, 0.3)
+    StartAnimationLoop()
 
     local Header = Create("Frame", {
         BackgroundTransparency = 1,
@@ -510,6 +682,8 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 0,
         Parent = LogoContainer
     })
+    -- OPTIMIZED: Use consolidated animation loop for logo rotation
+    RegisterRotationAnimation(LogoGradient, 45)
     local LogoLabel = Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
@@ -519,11 +693,6 @@ function MagicTulevo:CreateWindow(config)
         TextSize = #logoText > 1 and 16 or 20,
         Parent = LogoContainer
     })
-    local logoRot = 0
-    RunService.RenderStepped:Connect(function(dt)
-        logoRot = (logoRot + dt * 45) % 360
-        LogoGradient.Rotation = logoRot
-    end)
 
     local TitleLabel = Create("TextLabel", {
         BackgroundTransparency = 1,
@@ -998,6 +1167,9 @@ function MagicTulevo:CreateWindow(config)
         }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
         
         task.delay(0.4, function()
+            -- Stop allOOK - Stop consolidated animation loop
+            StopAnimationLoop()
+            
             -- Stop all sounds
             for _, sound in pairs(SoundService:GetChildren()) do
                 if sound:IsA("Sound") then
@@ -1014,7 +1186,23 @@ function MagicTulevo:CreateWindow(config)
             end
             MagicTulevo.Connections = {}
             
-            -- Destroy all MagicTulevo GUIs
+            -- Clear object pools
+            for poolName, pool in pairs(ObjectPool) do
+                for _, obj in pairs(pool) do
+                    if obj and obj.Parent then
+                        obj:Destroy()
+                    end
+                end
+                ObjectPool[poolName] = {}
+            end
+            
+            -- Clear TweenInfo cache
+            CustomTweenCache = {}
+            
+            -- Clear theme callbacks
+            MagicTulevo.OnThemeChangeCallbacks = {}
+            
+            -- Destroy all MagicTulevo GUIs (including notifications)
             for _, gui in pairs(CoreGui:GetChildren()) do
                 if gui.Name:find("MagicTulevo") then
                     gui:Destroy()
@@ -1024,8 +1212,11 @@ function MagicTulevo:CreateWindow(config)
             -- Clear windows table
             MagicTulevo.Windows = {}
             
+            -- Clear saved settings reference
+            MagicTulevo.SavedSettings = {}
+            
             -- Notify user
-            print("[MagicTulevo] Menu fully unhooked and destroyed")
+            print("[MagicTulevo] Menu fully unhooked and destroyed - all resources cleaned up")
         end)
     end)
     
@@ -1843,10 +2034,31 @@ function MagicTulevo:CreateWindow(config)
     local lastTextLength = 0
     local typingParticles = {}
     
+    -- Keyboard click sound for search input
+    local function PlayKeyboardClick()
+        local clickSound = Instance.new("Sound")
+        clickSound.SoundId = "rbxassetid://9611478915"
+        clickSound.Volume = 3
+        clickSound.PlaybackSpeed = 1.2
+        clickSound.Parent = SoundService
+        clickSound:Play()
+        clickSound.Ended:Connect(function()
+            clickSound:Destroy()
+        end)
+    end
+    
+    -- OPTIMIZED: Debounced search update to reduce lag during fast typing
+    local DebouncedUpdateSearch = Debounce(function(text)
+        UpdateSearch(text)
+    end, 0.1) -- 100ms debounce
+    
     UI.SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
         local newLength = #UI.SearchInput.Text
         
         if newLength > lastTextLength then
+            -- Play keyboard click sound
+            PlayKeyboardClick()
+            
             -- Character added - beautiful typing animation
             -- Icon pulse with glow
             Tween(UI.SearchInputIcon, 0.08, {Size = UDim2.new(0, 24, 0, 24), ImageTransparency = 0})
@@ -1861,27 +2073,29 @@ function MagicTulevo:CreateWindow(config)
                 Tween(UI.SearchInputContainer, 0.2, {BackgroundColor3 = Theme.Card})
             end)
             
-            -- Create floating particle effect
-            local Particle = Create("Frame", {
-                BackgroundColor3 = Theme.Accent,
-                Size = UDim2.new(0, 4, 0, 4),
-                Position = UDim2.new(0, 42 + newLength * 6, 0.5, 0),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                ZIndex = 10,
-                Parent = UI.SearchInputContainer
-            })
-            Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = Particle})
-            
-            local randomX = math.random(-20, 20)
-            local randomY = math.random(-30, -15)
-            Tween(Particle, 0.5, {
-                Position = UDim2.new(0, 42 + newLength * 6 + randomX, 0.5, randomY),
-                Size = UDim2.new(0, 0, 0, 0),
-                BackgroundTransparency = 1
-            }, Enum.EasingStyle.Quint)
-            task.delay(0.5, function()
-                if Particle then Particle:Destroy() end
-            end)
+            -- OPTIMIZED: Reduced particle effects (only every 3rd character)
+            if newLength % 3 == 0 then
+                local Particle = Create("Frame", {
+                    BackgroundColor3 = Theme.Accent,
+                    Size = UDim2.new(0, 4, 0, 4),
+                    Position = UDim2.new(0, 42 + newLength * 6, 0.5, 0),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    ZIndex = 10,
+                    Parent = UI.SearchInputContainer
+                })
+                Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = Particle})
+                
+                local randomX = math.random(-20, 20)
+                local randomY = math.random(-30, -15)
+                Tween(Particle, 0.5, {
+                    Position = UDim2.new(0, 42 + newLength * 6 + randomX, 0.5, randomY),
+                    Size = UDim2.new(0, 0, 0, 0),
+                    BackgroundTransparency = 1
+                }, Enum.EasingStyle.Quint)
+                task.delay(0.5, function()
+                    if Particle then Particle:Destroy() end
+                end)
+            end
             
         elseif newLength < lastTextLength then
             -- Character removed - elegant delete animation
@@ -1900,27 +2114,6 @@ function MagicTulevo:CreateWindow(config)
             task.delay(0.12, function()
                 Tween(UI.SearchInputStroke, 0.25, {Color = Theme.Accent, Thickness = 2})
             end)
-            
-            -- Create falling particle effect
-            local Particle = Create("Frame", {
-                BackgroundColor3 = Theme.Warning,
-                Size = UDim2.new(0, 6, 0, 6),
-                Position = UDim2.new(0, 42 + (newLength + 1) * 6, 0.5, 0),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                ZIndex = 10,
-                Parent = UI.SearchInputContainer
-            })
-            Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = Particle})
-            
-            Tween(Particle, 0.4, {
-                Position = UDim2.new(0, 42 + (newLength + 1) * 6, 1.5, 0),
-                Size = UDim2.new(0, 2, 0, 2),
-                BackgroundTransparency = 1,
-                Rotation = 180
-            }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-            task.delay(0.4, function()
-                if Particle then Particle:Destroy() end
-            end)
         end
         
         -- Text cleared completely - special animation
@@ -1931,7 +2124,8 @@ function MagicTulevo:CreateWindow(config)
         end
         
         lastTextLength = newLength
-        UpdateSearch(UI.SearchInput.Text)
+        -- OPTIMIZED: Use debounced search
+        DebouncedUpdateSearch(UI.SearchInput.Text)
     end)
     
     -- Focus animations
@@ -2931,13 +3125,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = SettingsHeaderFrame
     })
     
-    -- Animate settings header gear icon rotation
-    local settingsHeaderGearRotation = 0
-    local settingsHeaderGearConn = RunService.RenderStepped:Connect(function(dt)
-        settingsHeaderGearRotation = (settingsHeaderGearRotation + dt * 30) % 360
-        SettingsHeaderIcon.Rotation = settingsHeaderGearRotation
-    end)
-    table.insert(MagicTulevo.Connections, settingsHeaderGearConn)
+    -- OPTIMIZED: Use consolidated animation loop for settings gear
+    RegisterRotationAnimation(SettingsHeaderIcon, 30)
     
     Create("TextLabel", {
         BackgroundTransparency = 1,
@@ -3084,13 +3273,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = ShimmerBg
     })
     
-    -- Animate shimmer
-    local shimmerOffset = 0
-    local shimmerConn = RunService.RenderStepped:Connect(function(dt)
-        shimmerOffset = (shimmerOffset + dt * 0.15) % 1
-        ShimmerGradient.Offset = Vector2.new(shimmerOffset, shimmerOffset)
-    end)
-    table.insert(MagicTulevo.Connections, shimmerConn)
+    -- OPTIMIZED: Use consolidated animation loop for shimmer
+    RegisterGradientAnimation(ShimmerGradient, 0.15)
     
     local ThemeGrid = Create("ScrollingFrame", {
         BackgroundTransparency = 1,
@@ -3170,13 +3354,8 @@ function MagicTulevo:CreateWindow(config)
             Parent = GradientOverlay
         })
         
-        -- Animate gradient for this theme button
-        local gradOffset = math.random() -- Random start offset for variety
-        local gradConn = RunService.RenderStepped:Connect(function(dt)
-            gradOffset = (gradOffset + dt * 0.2) % 1
-            ThemePreviewGradient.Offset = Vector2.new(gradOffset, gradOffset * 0.5)
-        end)
-        table.insert(MagicTulevo.Connections, gradConn)
+        -- OPTIMIZED: Use consolidated animation loop for theme gradient
+        RegisterGradientAnimation(ThemePreviewGradient, 0.2)
         
         -- Theme preview bar
         local PreviewBar = Create("Frame", {
@@ -3637,13 +3816,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = HeaderGradientBg
     })
     
-    -- Animate header gradient
-    local headerGradOffset = 0
-    local headerGradConn = RunService.RenderStepped:Connect(function(dt)
-        headerGradOffset = (headerGradOffset + dt * 0.15) % 1
-        HeaderGradient.Offset = Vector2.new(headerGradOffset, headerGradOffset * 0.5)
-    end)
-    table.insert(MagicTulevo.Connections, headerGradConn)
+    -- OPTIMIZED: Use consolidated animation loop for header gradient
+    RegisterGradientAnimation(HeaderGradient, 0.15)
     
     -- Glowing accent line at top
     local HeaderAccentLine = Create("Frame", {
@@ -4118,12 +4292,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = LeadDevShimmer
     })
     
-    local leadShimmerOffset = 0
-    local leadShimmerConn = RunService.RenderStepped:Connect(function(dt)
-        leadShimmerOffset = (leadShimmerOffset + dt * 0.2) % 1
-        LeadDevShimmerGrad.Offset = Vector2.new(leadShimmerOffset, 0)
-    end)
-    table.insert(MagicTulevo.Connections, leadShimmerConn)
+    -- OPTIMIZED: Use consolidated animation loop for lead dev shimmer
+    RegisterGradientAnimation(LeadDevShimmerGrad, 0.2)
     
     -- Crown badge for lead dev
     local LeadDevBadge = Create("Frame", {
@@ -4428,7 +4598,7 @@ function MagicTulevo:CreateWindow(config)
     end)
     GitHubBtn.MouseButton1Click:Connect(function()
         PlaySound("rbxassetid://6895079853", 0.3)
-        setclipboard("https://github.com/TSMOffical/MagicTulevo-UI/blob/main/main.lua")
+        setclipboard("https://github.com/TSMOffical/MagicTulevo-UI/")
         MagicTulevo:Notify({
             Title = "GitHub",
             Message = "Link copied to clipboard!",
@@ -4542,7 +4712,8 @@ function MagicTulevo:CreateWindow(config)
             dragging = false
         end
     end)
-    RunService.RenderStepped:Connect(function()
+    -- OPTIMIZED: Track dragging connection for cleanup
+    local dragConn = RunService.RenderStepped:Connect(function()
         if dragging and dragStart then
             local mouse = UserInputService:GetMouseLocation()
             local delta = Vector2.new(mouse.X - dragStart.X, mouse.Y - dragStart.Y)
@@ -4550,6 +4721,7 @@ function MagicTulevo:CreateWindow(config)
             Main.Position = Main.Position:Lerp(target, 0.2)
         end
     end)
+    table.insert(MagicTulevo.Connections, dragConn)
 
     local resizing = false
     local resizeStart, startSize
@@ -5459,6 +5631,9 @@ function MagicTulevo:Destroy()
         SaveSettings(settingsToSave)
     end
     
+    -- OPTIMIZED: Stop consolidated animation loop
+    StopAnimationLoop()
+    
     -- Stop all sounds
     for _, sound in pairs(SoundService:GetChildren()) do
         if sound:IsA("Sound") then
@@ -5475,6 +5650,19 @@ function MagicTulevo:Destroy()
     end
     MagicTulevo.Connections = {}
     
+    -- OPTIMIZED: Clear object pools
+    for poolName, pool in pairs(ObjectPool) do
+        for _, obj in pairs(pool) do
+            if obj and obj.Parent then
+                obj:Destroy()
+            end
+        end
+        ObjectPool[poolName] = {}
+    end
+    
+    -- Clear TweenInfo cache
+    CustomTweenCache = {}
+    
     -- Destroy all GUIs
     for _, gui in pairs(CoreGui:GetChildren()) do
         if gui.Name:find("MagicTulevo") then
@@ -5483,7 +5671,7 @@ function MagicTulevo:Destroy()
     end
     
     MagicTulevo.Windows = {}
-    print("[MagicTulevo] Fully destroyed")
+    print("...")
 end
 
 return MagicTulevo
