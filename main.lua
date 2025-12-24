@@ -38,6 +38,18 @@ MagicTulevo.ToggleKey = Enum.KeyCode.K
 MagicTulevo.OnThemeChangeCallbacks = {}
 
 -- ═══════════════════════════════════════════════════════════════
+-- PERFORMANCE SETTINGS (User configurable)
+-- ═══════════════════════════════════════════════════════════════
+MagicTulevo.PerformanceSettings = {
+    AnimationsEnabled = true,      -- Enable/disable all UI animations
+    GradientsEnabled = true,       -- Enable/disable animated gradients
+    GlowEffectsEnabled = true,     -- Enable/disable glow effects
+    SoundsEnabled = true,          -- Enable/disable UI sounds
+    ParticlesEnabled = true,       -- Enable/disable particle effects
+    HoverEffectsEnabled = true,    -- Enable/disable hover animations
+}
+
+-- ═══════════════════════════════════════════════════════════════
 -- OPTIMIZATION: Cached TweenInfo objects (avoid creating new ones)
 -- ═══════════════════════════════════════════════════════════════
 local TweenInfoCache = {
@@ -73,6 +85,8 @@ local AnimationQueue = {
 }
 
 local function RegisterGradientAnimation(gradient, speed)
+    -- Skip if gradients disabled
+    if not MagicTulevo.PerformanceSettings.GradientsEnabled then return end
     AnimationQueue.GradientOffsets[gradient] = {offset = mathRandom(), speed = speed or 0.3}
 end
 
@@ -81,6 +95,8 @@ local function UnregisterGradientAnimation(gradient)
 end
 
 local function RegisterRotationAnimation(object, speed)
+    -- Skip if animations disabled
+    if not MagicTulevo.PerformanceSettings.AnimationsEnabled then return end
     AnimationQueue.Rotations[object] = {rotation = 0, speed = speed or 45}
 end
 
@@ -97,6 +113,11 @@ local function StartAnimationLoop()
     AnimationQueue.Active = true
     
     MainAnimationConnection = RunService.RenderStepped:Connect(function(dt)
+        -- Skip all animations if disabled
+        if not MagicTulevo.PerformanceSettings.AnimationsEnabled and not MagicTulevo.PerformanceSettings.GradientsEnabled then
+            return
+        end
+        
         animationAccumulator = animationAccumulator + dt
         
         -- Only update animations at 30 FPS to reduce CPU usage
@@ -104,23 +125,27 @@ local function StartAnimationLoop()
         local updateDt = animationAccumulator
         animationAccumulator = 0
         
-        -- Update all gradient offsets
-        for gradient, data in pairs(AnimationQueue.GradientOffsets) do
-            if gradient and gradient.Parent then
-                data.offset = (data.offset + updateDt * data.speed) % 1
-                gradient.Offset = Vector2New(data.offset, 0)
-            else
-                AnimationQueue.GradientOffsets[gradient] = nil
+        -- Update all gradient offsets (only if gradients enabled)
+        if MagicTulevo.PerformanceSettings.GradientsEnabled then
+            for gradient, data in pairs(AnimationQueue.GradientOffsets) do
+                if gradient and gradient.Parent then
+                    data.offset = (data.offset + updateDt * data.speed) % 1
+                    gradient.Offset = Vector2New(data.offset, 0)
+                else
+                    AnimationQueue.GradientOffsets[gradient] = nil
+                end
             end
         end
         
-        -- Update all rotations
-        for object, data in pairs(AnimationQueue.Rotations) do
-            if object and object.Parent then
-                data.rotation = (data.rotation + updateDt * data.speed) % 360
-                object.Rotation = data.rotation
-            else
-                AnimationQueue.Rotations[object] = nil
+        -- Update all rotations (only if animations enabled)
+        if MagicTulevo.PerformanceSettings.AnimationsEnabled then
+            for object, data in pairs(AnimationQueue.Rotations) do
+                if object and object.Parent then
+                    data.rotation = (data.rotation + updateDt * data.speed) % 360
+                    object.Rotation = data.rotation
+                else
+                    AnimationQueue.Rotations[object] = nil
+                end
             end
         end
     end)
@@ -232,6 +257,11 @@ local SoundPool = {}
 local MaxPooledSounds = 5
 
 local function PlaySound(id, vol)
+    -- Skip sounds if disabled in performance settings
+    if not MagicTulevo.PerformanceSettings.SoundsEnabled then
+        return
+    end
+    
     local s
     if #SoundPool > 0 then
         s = tableRemove(SoundPool)
@@ -274,6 +304,14 @@ end
 
 -- OPTIMIZED: Tween function using cached TweenInfo
 local function Tween(obj, t, props, style, dir)
+    -- Skip animations if disabled in performance settings
+    if not MagicTulevo.PerformanceSettings.AnimationsEnabled then
+        for prop, value in pairs(props) do
+            pcall(function() obj[prop] = value end)
+        end
+        return nil
+    end
+    
     local tweenInfo
     -- Use cached TweenInfo when possible
     if not style and not dir then
@@ -295,6 +333,11 @@ local function Tween(obj, t, props, style, dir)
 end
 
 local function AddGlow(parent, color, size)
+    -- Skip glow effects if disabled
+    if not MagicTulevo.PerformanceSettings.GlowEffectsEnabled then
+        return nil
+    end
+    
     local glow = Create("ImageLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0.5, 0, 0.5, 0),
@@ -473,6 +516,15 @@ MagicTulevo.Connections = {}
 MagicTulevo.Sounds = {}
 MagicTulevo.Windows = {}
 MagicTulevo.SavedSettings = LoadSettings() or {}
+
+-- Load saved performance settings
+if MagicTulevo.SavedSettings.PerformanceSettings then
+    for key, value in pairs(MagicTulevo.SavedSettings.PerformanceSettings) do
+        if MagicTulevo.PerformanceSettings[key] ~= nil then
+            MagicTulevo.PerformanceSettings[key] = value
+        end
+    end
+end
 
 function MagicTulevo:OnThemeChange(callback)
     if type(callback) == "function" then
@@ -940,6 +992,7 @@ function MagicTulevo:CreateWindow(config)
     
     -- Configs Button Hover
     UI.ConfigsBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.ConfigsTooltip, 0.3, {Size = UDim2.new(0, 65, 0, 26)}, Enum.EasingStyle.Back)
@@ -955,6 +1008,7 @@ function MagicTulevo:CreateWindow(config)
         end)
     end)
     UI.ConfigsBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         UI.configsIconRotating = false
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
@@ -1072,6 +1126,7 @@ function MagicTulevo:CreateWindow(config)
     
     -- Info Button Hover with subtle shake animation
     UI.InfoBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.Accent})
         Tween(UI.InfoTooltip, 0.3, {Size = UDim2.new(0, 50, 0, 26)}, Enum.EasingStyle.Back)
@@ -1095,6 +1150,7 @@ function MagicTulevo:CreateWindow(config)
         end)
     end)
     UI.InfoBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         UI.infoShaking = false
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted, Position = UDim2.new(0, 0, 0, 0)})
@@ -1116,6 +1172,7 @@ function MagicTulevo:CreateWindow(config)
     
     -- Search Button Hover with continuous backflip animation (like salto)
     UI.SearchBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SearchTooltip, 0.3, {Size = UDim2.new(0, 60, 0, 26)}, Enum.EasingStyle.Back)
@@ -1174,6 +1231,7 @@ function MagicTulevo:CreateWindow(config)
         end)
     end)
     UI.SearchBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         UI.searchAnimating = false
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.SearchIcon, 0.3, {
@@ -1187,6 +1245,7 @@ function MagicTulevo:CreateWindow(config)
     
     -- Settings Button Hover with gear rotation
     UI.SettingsBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SettingsTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
@@ -1200,6 +1259,7 @@ function MagicTulevo:CreateWindow(config)
         end)
     end)
     UI.SettingsBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
         Tween(UI.SettingsTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
@@ -1208,9 +1268,11 @@ function MagicTulevo:CreateWindow(config)
     end)
     
     UI.CloseBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.CloseBtn, 0.2, {BackgroundColor3 = Theme.Error, TextColor3 = Theme.Text})
     end)
     UI.CloseBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.CloseBtn, 0.2, {BackgroundColor3 = Theme.Card, TextColor3 = Theme.TextMuted})
     end)
     UI.CloseBtn.MouseButton1Click:Connect(function()
@@ -1672,9 +1734,11 @@ function MagicTulevo:CreateWindow(config)
                     Parent = ResultItem
                 })
                 ResultBtn.MouseEnter:Connect(function()
+                    if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                     Tween(ResultItem, 0.15, {BackgroundColor3 = themeData.Colors.CardHover})
                 end)
                 ResultBtn.MouseLeave:Connect(function()
+                    if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                     Tween(ResultItem, 0.15, {BackgroundColor3 = themeData.Colors.Card})
                 end)
                 ResultBtn.MouseButton1Click:Connect(function()
@@ -1831,10 +1895,12 @@ function MagicTulevo:CreateWindow(config)
                     Parent = ResultItem
                 })
                 ResultBtn.MouseEnter:Connect(function()
+                    if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                     Tween(ResultItem, 0.15, {BackgroundColor3 = Theme.CardHover})
                     Tween(ResultStroke, 0.15, {Color = Theme.Accent})
                 end)
                 ResultBtn.MouseLeave:Connect(function()
+                    if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                     Tween(ResultItem, 0.15, {BackgroundColor3 = Theme.Card})
                     Tween(ResultStroke, 0.15, {Color = Theme.Border})
                 end)
@@ -2112,9 +2178,11 @@ function MagicTulevo:CreateWindow(config)
     
     -- Clear button functionality
     UI.ClearBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.ClearBtn, 0.15, {BackgroundTransparency = 0.8, TextColor3 = Theme.Error})
     end)
     UI.ClearBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(UI.ClearBtn, 0.15, {BackgroundTransparency = 1, TextColor3 = Theme.TextMuted})
     end)
     UI.ClearBtn.MouseButton1Click:Connect(function()
@@ -2162,7 +2230,7 @@ function MagicTulevo:CreateWindow(config)
             end)
             
             -- OPTIMIZED: Particle effects with object reuse (every 3rd character)
-            if newLength % 3 == 0 then
+            if newLength % 3 == 0 and MagicTulevo.PerformanceSettings.ParticlesEnabled then
                 local Particle = Create("Frame", {
                     BackgroundColor3 = Theme.Accent,
                     Size = UDim2.new(0, 4, 0, 4),
@@ -2187,15 +2255,17 @@ function MagicTulevo:CreateWindow(config)
             
         elseif newLength < lastTextLength then
             -- Character removed - elegant delete animation
-            -- Icon shake with color change
-            local shakeAmount = 8
-            Tween(UI.SearchInputIcon, 0.05, {Position = UDim2.new(0, 14 + shakeAmount, 0.5, 0), ImageColor3 = Theme.Warning})
-            task.delay(0.05, function()
-                Tween(UI.SearchInputIcon, 0.05, {Position = UDim2.new(0, 14 - shakeAmount, 0.5, 0)})
-            end)
-            task.delay(0.1, function()
-                Tween(UI.SearchInputIcon, 0.15, {Position = UDim2.new(0, 14, 0.5, 0), ImageColor3 = Theme.Accent}, Enum.EasingStyle.Elastic)
-            end)
+            -- Icon shake with color change (only if animations enabled)
+            if MagicTulevo.PerformanceSettings.AnimationsEnabled then
+                local shakeAmount = 8
+                Tween(UI.SearchInputIcon, 0.05, {Position = UDim2.new(0, 14 + shakeAmount, 0.5, 0), ImageColor3 = Theme.Warning})
+                task.delay(0.05, function()
+                    Tween(UI.SearchInputIcon, 0.05, {Position = UDim2.new(0, 14 - shakeAmount, 0.5, 0)})
+                end)
+                task.delay(0.1, function()
+                    Tween(UI.SearchInputIcon, 0.15, {Position = UDim2.new(0, 14, 0.5, 0), ImageColor3 = Theme.Accent}, Enum.EasingStyle.Elastic)
+                end)
+            end
             
             -- Stroke flash warning then back
             Tween(UI.SearchInputStroke, 0.08, {Color = Theme.Warning, Thickness = 3})
@@ -3085,10 +3155,12 @@ function MagicTulevo:CreateWindow(config)
     })
     
     AccountBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(AccountTooltip, 0.3, {Size = UDim2.new(1, 0, 0, 40)}, Enum.EasingStyle.Back)
     end)
     AccountBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(AccountTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 0)})
     end)
@@ -3307,11 +3379,13 @@ function MagicTulevo:CreateWindow(config)
         Tween(KeybindBtn, 0.2, {BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Text})
     end)
     KeybindBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         if not listeningKey then
             Tween(KeybindBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         end
     end)
     KeybindBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         if not listeningKey then
             Tween(KeybindBtn, 0.2, {BackgroundColor3 = Theme.Background})
         end
@@ -3521,10 +3595,12 @@ function MagicTulevo:CreateWindow(config)
         end
         
         ThemeBtn.MouseEnter:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
             Tween(ThemeBtn, 0.2, {BackgroundColor3 = themeData.Colors.CardHover})
             Tween(ThemeBtnStroke, 0.2, {Color = themeData.Colors.Accent, Thickness = 2})
         end)
         ThemeBtn.MouseLeave:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
             if CurrentThemeIndex ~= i then
                 Tween(ThemeBtn, 0.2, {BackgroundColor3 = themeData.Colors.Card})
                 Tween(ThemeBtnStroke, 0.2, {Color = themeData.Colors.Border, Thickness = 1})
@@ -3570,6 +3646,211 @@ function MagicTulevo:CreateWindow(config)
             end
         end
     end
+    
+    -- ═══════════════════════════════════════════════════════════════
+    -- PERFORMANCE SECTION
+    -- ═══════════════════════════════════════════════════════════════
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = "PERFORMANCE",
+        TextColor3 = Theme.TextDark,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 5,
+        Parent = PanelState.SettingsTabContent
+    })
+    
+    -- Performance Container
+    local PerformanceContainer = Create("Frame", {
+        BackgroundColor3 = Theme.Card,
+        Size = UDim2.new(1, 0, 0, 320),
+        LayoutOrder = 6,
+        ClipsDescendants = true,
+        Parent = PanelState.SettingsTabContent
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = PerformanceContainer})
+    Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.5, Parent = PerformanceContainer})
+    
+    -- Performance info header
+    local PerfInfoHeader = Create("Frame", {
+        BackgroundColor3 = Theme.Warning,
+        BackgroundTransparency = 0.9,
+        Size = UDim2.new(1, -16, 0, 36),
+        Position = UDim2.new(0, 8, 0, 8),
+        Parent = PerformanceContainer
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = PerfInfoHeader})
+    
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(0, 10, 0.5, -10),
+        Font = Enum.Font.GothamBold,
+        Text = "⚡",
+        TextColor3 = Theme.Warning,
+        TextSize = 14,
+        Parent = PerfInfoHeader
+    })
+    
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -40, 1, 0),
+        Position = UDim2.new(0, 34, 0, 0),
+        Font = Enum.Font.Gotham,
+        Text = "Отключите эффекты для повышения FPS на слабых ПК",
+        TextColor3 = Theme.Warning,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = PerfInfoHeader
+    })
+    
+    -- Performance toggles container
+    local PerfTogglesContainer = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -16, 0, 260),
+        Position = UDim2.new(0, 8, 0, 52),
+        Parent = PerformanceContainer
+    })
+    Create("UIListLayout", {
+        Padding = UDim.new(0, 6),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = PerfTogglesContainer
+    })
+    
+    -- Helper function to create performance toggle
+    local function CreatePerfToggle(name, description, icon, settingKey, layoutOrder)
+        local ToggleFrame = Create("Frame", {
+            BackgroundColor3 = Theme.Background,
+            Size = UDim2.new(1, 0, 0, 42),
+            LayoutOrder = layoutOrder,
+            Parent = PerfTogglesContainer
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = ToggleFrame})
+        
+        -- Icon
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 24, 0, 24),
+            Position = UDim2.new(0, 10, 0.5, -12),
+            Font = Enum.Font.GothamBold,
+            Text = icon,
+            TextColor3 = Theme.Accent,
+            TextSize = 14,
+            Parent = ToggleFrame
+        })
+        
+        -- Name
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -130, 0, 16),
+            Position = UDim2.new(0, 40, 0, 6),
+            Font = Enum.Font.GothamMedium,
+            Text = name,
+            TextColor3 = Theme.Text,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = ToggleFrame
+        })
+        
+        -- Description
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -130, 0, 12),
+            Position = UDim2.new(0, 40, 0, 24),
+            Font = Enum.Font.Gotham,
+            Text = description,
+            TextColor3 = Theme.TextDark,
+            TextSize = 9,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = ToggleFrame
+        })
+        
+        -- Toggle background
+        local currentValue = MagicTulevo.PerformanceSettings[settingKey]
+        local ToggleBg = Create("Frame", {
+            BackgroundColor3 = currentValue and Theme.Success or Theme.Background,
+            Size = UDim2.new(0, 44, 0, 24),
+            Position = UDim2.new(1, -56, 0.5, -12),
+            Parent = ToggleFrame
+        })
+        Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleBg})
+        Create("UIStroke", {Color = currentValue and Theme.Success or Theme.Border, Thickness = 1, Transparency = 0.5, Parent = ToggleBg})
+        
+        -- Toggle circle
+        local ToggleCircle = Create("Frame", {
+            BackgroundColor3 = Theme.Text,
+            Size = UDim2.new(0, 18, 0, 18),
+            Position = currentValue and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9),
+            Parent = ToggleBg
+        })
+        Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleCircle})
+        
+        -- Click handler
+        local ToggleBtn = Create("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = "",
+            Parent = ToggleFrame
+        })
+        
+        ToggleBtn.MouseButton1Click:Connect(function()
+            currentValue = not currentValue
+            MagicTulevo.PerformanceSettings[settingKey] = currentValue
+            
+            -- Update visuals
+            if currentValue then
+                Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Success})
+                Tween(ToggleCircle, 0.25, {Position = UDim2.new(1, -21, 0.5, -9)}, Enum.EasingStyle.Back)
+                local stroke = ToggleBg:FindFirstChildOfClass("UIStroke")
+                if stroke then Tween(stroke, 0.25, {Color = Theme.Success}) end
+            else
+                Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Background})
+                Tween(ToggleCircle, 0.25, {Position = UDim2.new(0, 3, 0.5, -9)}, Enum.EasingStyle.Back)
+                local stroke = ToggleBg:FindFirstChildOfClass("UIStroke")
+                if stroke then Tween(stroke, 0.25, {Color = Theme.Border}) end
+            end
+            
+            -- Special handling for gradients - stop/start animation loop
+            if settingKey == "GradientsEnabled" then
+                if not currentValue then
+                    -- Clear all gradient animations
+                    AnimationQueue.GradientOffsets = {}
+                end
+            end
+            
+            -- Save settings
+            if MagicTulevo.SavedSettings then
+                MagicTulevo.SavedSettings.PerformanceSettings = MagicTulevo.PerformanceSettings
+                SaveSettings(MagicTulevo.SavedSettings)
+            end
+            
+            PlaySound("rbxassetid://6895079853", 0.3)
+        end)
+        
+        ToggleBtn.MouseEnter:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
+            Tween(ToggleFrame, 0.15, {BackgroundColor3 = Theme.Card})
+        end)
+        ToggleBtn.MouseLeave:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
+            Tween(ToggleFrame, 0.15, {BackgroundColor3 = Theme.Background})
+        end)
+        
+        return ToggleFrame
+    end
+    
+    -- Create all performance toggles
+    CreatePerfToggle("Анимации", "Плавные переходы и эффекты", "✨", "AnimationsEnabled", 1)
+    CreatePerfToggle("Градиенты", "Анимированные цветовые переходы", "🌈", "GradientsEnabled", 2)
+    CreatePerfToggle("Свечение", "Эффекты свечения элементов", "💡", "GlowEffectsEnabled", 3)
+    CreatePerfToggle("Звуки", "Звуковые эффекты интерфейса", "🔊", "SoundsEnabled", 4)
+    CreatePerfToggle("Частицы", "Эффекты частиц при вводе", "✦", "ParticlesEnabled", 5)
+    CreatePerfToggle("Hover эффекты", "Анимации при наведении", "🖱️", "HoverEffectsEnabled", 6)
+    
+    -- Update CanvasSize for SettingsTabContent
+    PanelState.SettingsTabContent.CanvasSize = UDim2.new(0, 0, 0, 880)
 
     -- =====================================================
     -- Create Account Tab Content (Player Info)
@@ -3795,9 +4076,11 @@ function MagicTulevo:CreateWindow(config)
         })
         
         card.MouseEnter:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
             Tween(card, 0.15, {BackgroundColor3 = Theme.Secondary})
         end)
         card.MouseLeave:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
             Tween(card, 0.15, {BackgroundColor3 = Theme.Card})
         end)
         return card
@@ -3847,9 +4130,11 @@ function MagicTulevo:CreateWindow(config)
     end)
     
     CopyHwidBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(CopyHwidBtn, 0.15, {Size = UDim2.new(1, 0, 0, 43)})
     end)
     CopyHwidBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(CopyHwidBtn, 0.15, {Size = UDim2.new(1, 0, 0, 40)})
     end)
     
@@ -4203,10 +4488,12 @@ function MagicTulevo:CreateWindow(config)
         end
     end)
     DiscordCopyBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(DiscordCopyBtn, 0.2, {Size = UDim2.new(0, 74, 0, 38), Position = UDim2.new(1, -84, 0.5, -19)})
         Tween(DiscordStroke, 0.2, {Transparency = 0})
     end)
     DiscordCopyBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(DiscordCopyBtn, 0.2, {Size = UDim2.new(0, 70, 0, 34), Position = UDim2.new(1, -82, 0.5, -17)})
         Tween(DiscordStroke, 0.2, {Transparency = 0.5})
     end)
@@ -4312,10 +4599,12 @@ function MagicTulevo:CreateWindow(config)
         end
     end)
     TelegramCopyBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(TelegramCopyBtn, 0.2, {Size = UDim2.new(0, 74, 0, 38), Position = UDim2.new(1, -84, 0.5, -19)})
         Tween(TelegramStroke, 0.2, {Transparency = 0})
     end)
     TelegramCopyBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(TelegramCopyBtn, 0.2, {Size = UDim2.new(0, 70, 0, 34), Position = UDim2.new(1, -82, 0.5, -17)})
         Tween(TelegramStroke, 0.2, {Transparency = 0.5})
     end)
@@ -4666,11 +4955,13 @@ function MagicTulevo:CreateWindow(config)
     })
     
     GitHubBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(GitHubFrame, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(GitHubIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(GitHubIconHolder, 0.2, {BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.85})
     end)
     GitHubBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(GitHubFrame, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(GitHubIcon, 0.2, {ImageColor3 = Theme.TextMuted})
         Tween(GitHubIconHolder, 0.2, {BackgroundColor3 = Theme.Secondary, BackgroundTransparency = 0})
@@ -4832,10 +5123,12 @@ function MagicTulevo:CreateWindow(config)
     })
     
     ResizeBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         Tween(ResizeHandle, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(ResizeArrow, 0.2, {TextColor3 = Theme.Accent})
     end)
     ResizeBtn.MouseLeave:Connect(function()
+        if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
         if not resizing then
             Tween(ResizeHandle, 0.2, {BackgroundColor3 = Theme.Card})
             Tween(ResizeArrow, 0.2, {TextColor3 = Theme.TextDark})
@@ -5120,12 +5413,14 @@ function MagicTulevo:CreateWindow(config)
 
         TabButton.MouseButton1Click:Connect(SelectTab)
         TabButton.MouseEnter:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
             if Window.CurrentTab ~= Tab then
                 Tween(TabButton, 0.2, {BackgroundTransparency = 0.6, BackgroundColor3 = Theme.Card})
                 Tween(TabLabel, 0.2, {TextColor3 = Theme.Text})
             end
         end)
         TabButton.MouseLeave:Connect(function()
+            if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
             if Window.CurrentTab ~= Tab then
                 Tween(TabButton, 0.2, {BackgroundTransparency = 1})
                 Tween(TabLabel, 0.2, {TextColor3 = Theme.TextMuted})
@@ -5166,8 +5461,8 @@ function MagicTulevo:CreateWindow(config)
             local Button = Create("TextButton", {BackgroundColor3 = Theme.Card, Size = UDim2New(1, 0, 0, 36), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Button", TextColor3 = Theme.Text, TextSize = 13, AutoButtonColor = false, Parent = TabContent})
             Create("UICorner", {CornerRadius = UDimNew(0, 8), Parent = Button})
             Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Button})
-            Button.MouseEnter:Connect(function() Tween(Button, 0.2, {BackgroundColor3 = Theme.CardHover}) end)
-            Button.MouseLeave:Connect(function() Tween(Button, 0.2, {BackgroundColor3 = Theme.Card}) end)
+            Button.MouseEnter:Connect(function() if MagicTulevo.PerformanceSettings.HoverEffectsEnabled then Tween(Button, 0.2, {BackgroundColor3 = Theme.CardHover}) end end)
+            Button.MouseLeave:Connect(function() if MagicTulevo.PerformanceSettings.HoverEffectsEnabled then Tween(Button, 0.2, {BackgroundColor3 = Theme.Card}) end end)
             Button.MouseButton1Click:Connect(function()
                 Tween(Button, 0.1, {BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Text})
                 task.delay(0.15, function() Tween(Button, 0.25, {BackgroundColor3 = Theme.Card, TextColor3 = Theme.Text}) end)
@@ -5275,8 +5570,8 @@ function MagicTulevo:CreateWindow(config)
             for _, opt in ipairs(options) do
                 local OptBtn = Create("TextButton", {BackgroundColor3 = Theme.Background, Size = UDim2.new(1, 0, 0, 28), Font = Enum.Font.Gotham, Text = opt, TextColor3 = Theme.Text, TextSize = 12, AutoButtonColor = false, Parent = DropList})
                 Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = OptBtn})
-                OptBtn.MouseEnter:Connect(function() Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.CardHover}) end)
-                OptBtn.MouseLeave:Connect(function() Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.Background}) end)
+                OptBtn.MouseEnter:Connect(function() if MagicTulevo.PerformanceSettings.HoverEffectsEnabled then Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.CardHover}) end end)
+                OptBtn.MouseLeave:Connect(function() if MagicTulevo.PerformanceSettings.HoverEffectsEnabled then Tween(OptBtn, 0.15, {BackgroundColor3 = Theme.Background}) end end)
                 OptBtn.MouseButton1Click:Connect(function()
                     DropdownObj.Value = opt
                     Selected.Text = opt
@@ -5547,10 +5842,12 @@ function MagicTulevo:CreateWindow(config)
                 Create("UICorner", {CornerRadius = UDim.new(0, 4), Parent = RemoveBtn})
                 
                 RemoveBtn.MouseEnter:Connect(function()
+                    if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                     Tween(RemoveBtn, 0.15, {BackgroundTransparency = 0, TextColor3 = Theme.Text})
                     Tween(Row, 0.15, {BackgroundColor3 = Theme.Error, BackgroundTransparency = 0.85})
                 end)
                 RemoveBtn.MouseLeave:Connect(function()
+                    if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                     Tween(RemoveBtn, 0.15, {BackgroundTransparency = 0.85, TextColor3 = Theme.Error})
                     Tween(Row, 0.15, {BackgroundColor3 = Theme.Background, BackgroundTransparency = 0.5})
                 end)
@@ -5642,9 +5939,11 @@ function MagicTulevo:CreateWindow(config)
             
             -- Expand/collapse
             ExpandBtn.MouseEnter:Connect(function()
+                if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                 Tween(ExpandBtn, 0.15, {BackgroundColor3 = Theme.CardHover, TextColor3 = Theme.Accent})
             end)
             ExpandBtn.MouseLeave:Connect(function()
+                if not MagicTulevo.PerformanceSettings.HoverEffectsEnabled then return end
                 Tween(ExpandBtn, 0.15, {BackgroundColor3 = Theme.Background, TextColor3 = Theme.TextMuted})
             end)
             ExpandBtn.MouseButton1Click:Connect(function()
