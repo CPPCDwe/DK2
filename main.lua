@@ -3725,12 +3725,46 @@ function MagicTulevo:CreateWindow(config)
         })
         Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = ThemeBgGradient})
         
-        -- Theme preview bar at top
+        -- Add animated gradient overlay
+        local GradientOverlay = Create("Frame", {
+            BackgroundTransparency = 0.85,
+            BackgroundColor3 = themeData.Colors.Accent,
+            Size = UDim2.new(2, 0, 2, 0),
+            Position = UDim2.new(-0.5, 0, -0.5, 0),
+            ZIndex = 1,
+            Parent = ThemeBtn
+        })
+        
+        local themeGradientColors
+        if themeData.IsGradient and themeData.GradientColors then
+            local keypoints = {}
+            for j, color in ipairs(themeData.GradientColors) do
+                table.insert(keypoints, ColorSequenceKeypoint.new((j-1)/(#themeData.GradientColors-1), color))
+            end
+            themeGradientColors = ColorSequence.new(keypoints)
+        else
+            themeGradientColors = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, themeData.Colors.Accent),
+                ColorSequenceKeypoint.new(0.5, themeData.Colors.AccentGlow),
+                ColorSequenceKeypoint.new(1, themeData.Colors.AccentDark)
+            })
+        end
+        
+        local ThemePreviewGradient = Create("UIGradient", {
+            Color = themeGradientColors,
+            Rotation = themeData.GradientRotation or 45,
+            Parent = GradientOverlay
+        })
+        
+        -- OPTIMIZED: Removed gradient animation for theme buttons to reduce startup lag
+        -- Animation only starts when hovering over theme button
+        
+        -- Theme preview bar
         local PreviewBar = Create("Frame", {
             BackgroundColor3 = themeData.Colors.Accent,
             Size = UDim2.new(1, 0, 0, 4),
             Position = UDim2.new(0, 0, 0, 0),
-            ZIndex = 3,
+            ZIndex = 2,
             Parent = ThemeBtn
         })
         Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = PreviewBar})
@@ -3747,12 +3781,12 @@ function MagicTulevo:CreateWindow(config)
             })
         end
         
-        -- Color dots preview - show actual theme colors
+        -- Color dots preview
         local DotsContainer = Create("Frame", {
             BackgroundTransparency = 1,
             Size = UDim2.new(1, -10, 0, 14),
             Position = UDim2.new(0, 5, 0, 10),
-            ZIndex = 5,
+            ZIndex = 2,
             Parent = ThemeBtn
         })
         Create("UIListLayout", {
@@ -3762,26 +3796,12 @@ function MagicTulevo:CreateWindow(config)
             Parent = DotsContainer
         })
         
-        -- Use gradient colors for gradient themes, otherwise use accent colors
-        local previewColors
-        if themeData.IsGradient and themeData.GradientColors and #themeData.GradientColors >= 2 then
-            previewColors = {}
-            for j = 1, math.min(3, #themeData.GradientColors) do
-                table.insert(previewColors, themeData.GradientColors[j])
-            end
-            -- If only 2 gradient colors, add a third from theme
-            if #previewColors < 3 then
-                table.insert(previewColors, themeData.Colors.AccentGlow)
-            end
-        else
-            previewColors = {themeData.Colors.Accent, themeData.Colors.AccentDark, themeData.Colors.AccentGlow}
-        end
-        
+        local previewColors = {themeData.Colors.Accent, themeData.Colors.AccentDark, themeData.Colors.AccentGlow}
         for _, color in ipairs(previewColors) do
             local Dot = Create("Frame", {
                 BackgroundColor3 = color,
                 Size = UDim2.new(0, 12, 0, 12),
-                ZIndex = 6,
+                ZIndex = 2,
                 Parent = DotsContainer
             })
             Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = Dot})
