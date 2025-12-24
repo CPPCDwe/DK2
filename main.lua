@@ -732,7 +732,7 @@ function MagicTulevo:CreateWindow(config)
 
     local HeaderButtons = Create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(0, 178, 0, 32),
+        Size = UDim2.new(0, 216, 0, 32),
         Position = UDim2.new(1, -192, 0.5, -16),
         Parent = Header
     })
@@ -753,6 +753,10 @@ function MagicTulevo:CreateWindow(config)
         ConfigsBtn = nil,
         ConfigsIcon = nil,
         ConfigsTooltip = nil,
+        CustomBtnContainer = nil,
+        CustomBtn = nil,
+        CustomIcon = nil,
+        CustomTooltip = nil,
         SettingsBtnContainer = nil,
         SettingsBtn = nil,
         GearIcon = nil,
@@ -780,6 +784,466 @@ function MagicTulevo:CreateWindow(config)
         infoShaking = false,
         SearchOpen = false
     }
+    
+    -- ═══════════════════════════════════════════════════════════════
+    -- COLOR PICKER SYSTEM (Rayfield Style)
+    -- ═══════════════════════════════════════════════════════════════
+    
+    -- Custom Theme Colors Storage
+    local CustomThemeColors = {
+        Background = Color3.fromRGB(13, 13, 18),
+        Secondary = Color3.fromRGB(18, 18, 25),
+        Card = Color3.fromRGB(24, 24, 34),
+        CardHover = Color3.fromRGB(32, 32, 45),
+        Accent = Color3.fromRGB(138, 92, 246),
+        AccentDark = Color3.fromRGB(108, 62, 216),
+        AccentGlow = Color3.fromRGB(168, 122, 255),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextMuted = Color3.fromRGB(140, 140, 165),
+        TextDark = Color3.fromRGB(90, 90, 110),
+        Border = Color3.fromRGB(38, 38, 52),
+        Success = Color3.fromRGB(34, 197, 94),
+        Error = Color3.fromRGB(239, 68, 68),
+        Warning = Color3.fromRGB(245, 158, 11)
+    }
+    
+    -- Load saved custom colors
+    if MagicTulevo.SavedSettings and MagicTulevo.SavedSettings.CustomThemeColors then
+        for key, colorData in pairs(MagicTulevo.SavedSettings.CustomThemeColors) do
+            if colorData and colorData[1] and colorData[2] and colorData[3] then
+                CustomThemeColors[key] = Color3.fromRGB(colorData[1], colorData[2], colorData[3])
+            end
+        end
+    end
+    
+    -- HSV to RGB conversion
+    local function HSVtoRGB(h, s, v)
+        local r, g, b
+        local i = math.floor(h * 6)
+        local f = h * 6 - i
+        local p = v * (1 - s)
+        local q = v * (1 - f * s)
+        local t = v * (1 - (1 - f) * s)
+        i = i % 6
+        if i == 0 then r, g, b = v, t, p
+        elseif i == 1 then r, g, b = q, v, p
+        elseif i == 2 then r, g, b = p, v, t
+        elseif i == 3 then r, g, b = p, q, v
+        elseif i == 4 then r, g, b = t, p, v
+        elseif i == 5 then r, g, b = v, p, q
+        end
+        return Color3.fromRGB(math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
+    end
+    
+    -- RGB to HSV conversion
+    local function RGBtoHSV(color)
+        local r, g, b = color.R, color.G, color.B
+        local max, min = math.max(r, g, b), math.min(r, g, b)
+        local h, s, v
+        v = max
+        local d = max - min
+        if max == 0 then s = 0 else s = d / max end
+        if max == min then
+            h = 0
+        else
+            if max == r then
+                h = (g - b) / d
+                if g < b then h = h + 6 end
+            elseif max == g then
+                h = (b - r) / d + 2
+            elseif max == b then
+                h = (r - g) / d + 4
+            end
+            h = h / 6
+        end
+        return h, s, v
+    end
+    
+    -- Create Color Picker Component
+    local function CreateColorPicker(parent, colorName, defaultColor, callback)
+        local currentColor = defaultColor
+        local h, s, v = RGBtoHSV(currentColor)
+        local pickerOpen = false
+        
+        local PickerFrame = Create("Frame", {
+            BackgroundColor3 = Theme.Card,
+            Size = UDim2.new(1, 0, 0, 36),
+            Parent = parent
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = PickerFrame})
+        Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = PickerFrame})
+        
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -80, 1, 0),
+            Position = UDim2.new(0, 12, 0, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = colorName,
+            TextColor3 = Theme.Text,
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = PickerFrame
+        })
+        
+        local ColorPreview = Create("Frame", {
+            BackgroundColor3 = currentColor,
+            Size = UDim2.new(0, 60, 0, 24),
+            Position = UDim2.new(1, -72, 0.5, -12),
+            Parent = PickerFrame
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = ColorPreview})
+        Create("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = ColorPreview})
+        
+        local ColorBtn = Create("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = "",
+            Parent = ColorPreview
+        })
+        
+        -- Expanded picker panel
+        local PickerPanel = Create("Frame", {
+            BackgroundColor3 = Theme.Secondary,
+            Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.new(0, 0, 1, 4),
+            ClipsDescendants = true,
+            ZIndex = 50,
+            Parent = PickerFrame
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = PickerPanel})
+        Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.5, Parent = PickerPanel})
+        
+        -- Saturation/Value picker (main color square)
+        local SVPicker = Create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 0, 0),
+            Size = UDim2.new(1, -70, 0, 120),
+            Position = UDim2.new(0, 8, 0, 8),
+            ZIndex = 51,
+            Parent = PickerPanel
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = SVPicker})
+        
+        -- White gradient (left to right)
+        local WhiteGradient = Create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.new(1, 0, 1, 0),
+            ZIndex = 52,
+            Parent = SVPicker
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = WhiteGradient})
+        Create("UIGradient", {
+            Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)),
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }),
+            Parent = WhiteGradient
+        })
+        
+        -- Black gradient (top to bottom)
+        local BlackGradient = Create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            Size = UDim2.new(1, 0, 1, 0),
+            ZIndex = 53,
+            Parent = SVPicker
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = BlackGradient})
+        Create("UIGradient", {
+            Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(0, 0, 0)),
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(1, 0)
+            }),
+            Rotation = 90,
+            Parent = BlackGradient
+        })
+        
+        -- SV Cursor
+        local SVCursor = Create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.new(0, 12, 0, 12),
+            Position = UDim2.new(s, -6, 1 - v, -6),
+            ZIndex = 54,
+            Parent = SVPicker
+        })
+        Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SVCursor})
+        Create("UIStroke", {Color = Color3.fromRGB(0, 0, 0), Thickness = 2, Parent = SVCursor})
+        
+        -- Hue slider (vertical rainbow)
+        local HueSlider = Create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.new(0, 20, 0, 120),
+            Position = UDim2.new(1, -54, 0, 8),
+            ZIndex = 51,
+            Parent = PickerPanel
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = HueSlider})
+        Create("UIGradient", {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+                ColorSequenceKeypoint.new(0.167, Color3.fromRGB(255, 255, 0)),
+                ColorSequenceKeypoint.new(0.333, Color3.fromRGB(0, 255, 0)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+                ColorSequenceKeypoint.new(0.667, Color3.fromRGB(0, 0, 255)),
+                ColorSequenceKeypoint.new(0.833, Color3.fromRGB(255, 0, 255)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+            }),
+            Rotation = 90,
+            Parent = HueSlider
+        })
+        
+        -- Hue cursor
+        local HueCursor = Create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.new(1, 4, 0, 6),
+            Position = UDim2.new(0, -2, h, -3),
+            ZIndex = 52,
+            Parent = HueSlider
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 3), Parent = HueCursor})
+        Create("UIStroke", {Color = Color3.fromRGB(0, 0, 0), Thickness = 1, Parent = HueCursor})
+        
+        -- Alpha slider
+        local AlphaSlider = Create("Frame", {
+            BackgroundColor3 = currentColor,
+            Size = UDim2.new(0, 20, 0, 120),
+            Position = UDim2.new(1, -28, 0, 8),
+            ZIndex = 51,
+            Parent = PickerPanel
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = AlphaSlider})
+        Create("UIGradient", {
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }),
+            Rotation = 90,
+            Parent = AlphaSlider
+        })
+        
+        -- RGB Input fields
+        local RGBContainer = Create("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -16, 0, 28),
+            Position = UDim2.new(0, 8, 0, 136),
+            ZIndex = 51,
+            Parent = PickerPanel
+        })
+        
+        local function CreateRGBInput(name, pos, defaultVal)
+            local InputFrame = Create("Frame", {
+                BackgroundColor3 = Theme.Background,
+                Size = UDim2.new(0.3, -4, 1, 0),
+                Position = pos,
+                ZIndex = 51,
+                Parent = RGBContainer
+            })
+            Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = InputFrame})
+            
+            Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0, 14, 1, 0),
+                Position = UDim2.new(0, 4, 0, 0),
+                Font = Enum.Font.GothamBold,
+                Text = name,
+                TextColor3 = Theme.TextMuted,
+                TextSize = 10,
+                ZIndex = 52,
+                Parent = InputFrame
+            })
+            
+            local Input = Create("TextBox", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -20, 1, 0),
+                Position = UDim2.new(0, 18, 0, 0),
+                Font = Enum.Font.GothamMedium,
+                Text = tostring(defaultVal),
+                TextColor3 = Theme.Text,
+                TextSize = 11,
+                ClearTextOnFocus = false,
+                ZIndex = 52,
+                Parent = InputFrame
+            })
+            
+            return Input
+        end
+        
+        local RInput = CreateRGBInput("R", UDim2.new(0, 0, 0, 0), math.floor(currentColor.R * 255))
+        local GInput = CreateRGBInput("G", UDim2.new(0.35, 0, 0, 0), math.floor(currentColor.G * 255))
+        local BInput = CreateRGBInput("B", UDim2.new(0.7, 0, 0, 0), math.floor(currentColor.B * 255))
+        
+        -- Hex input
+        local HexFrame = Create("Frame", {
+            BackgroundColor3 = Theme.Background,
+            Size = UDim2.new(1, -16, 0, 28),
+            Position = UDim2.new(0, 8, 0, 170),
+            ZIndex = 51,
+            Parent = PickerPanel
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = HexFrame})
+        
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 20, 1, 0),
+            Position = UDim2.new(0, 6, 0, 0),
+            Font = Enum.Font.GothamBold,
+            Text = "#",
+            TextColor3 = Theme.TextMuted,
+            TextSize = 12,
+            ZIndex = 52,
+            Parent = HexFrame
+        })
+        
+        local HexInput = Create("TextBox", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -30, 1, 0),
+            Position = UDim2.new(0, 26, 0, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = string.format("%02X%02X%02X", math.floor(currentColor.R * 255), math.floor(currentColor.G * 255), math.floor(currentColor.B * 255)),
+            TextColor3 = Theme.Text,
+            TextSize = 12,
+            ClearTextOnFocus = false,
+            ZIndex = 52,
+            Parent = HexFrame
+        })
+        
+        -- Update functions
+        local function UpdateColor()
+            currentColor = HSVtoRGB(h, s, v)
+            ColorPreview.BackgroundColor3 = currentColor
+            SVPicker.BackgroundColor3 = HSVtoRGB(h, 1, 1)
+            AlphaSlider.BackgroundColor3 = currentColor
+            SVCursor.Position = UDim2.new(s, -6, 1 - v, -6)
+            HueCursor.Position = UDim2.new(0, -2, h, -3)
+            
+            RInput.Text = tostring(math.floor(currentColor.R * 255))
+            GInput.Text = tostring(math.floor(currentColor.G * 255))
+            BInput.Text = tostring(math.floor(currentColor.B * 255))
+            HexInput.Text = string.format("%02X%02X%02X", math.floor(currentColor.R * 255), math.floor(currentColor.G * 255), math.floor(currentColor.B * 255))
+            
+            if callback then
+                callback(currentColor)
+            end
+        end
+        
+        local function UpdateFromRGB()
+            local r = math.clamp(tonumber(RInput.Text) or 0, 0, 255)
+            local g = math.clamp(tonumber(GInput.Text) or 0, 0, 255)
+            local b = math.clamp(tonumber(BInput.Text) or 0, 0, 255)
+            currentColor = Color3.fromRGB(r, g, b)
+            h, s, v = RGBtoHSV(currentColor)
+            UpdateColor()
+        end
+        
+        local function UpdateFromHex()
+            local hex = HexInput.Text:gsub("#", "")
+            if #hex == 6 then
+                local r = tonumber(hex:sub(1, 2), 16) or 0
+                local g = tonumber(hex:sub(3, 4), 16) or 0
+                local b = tonumber(hex:sub(5, 6), 16) or 0
+                currentColor = Color3.fromRGB(r, g, b)
+                h, s, v = RGBtoHSV(currentColor)
+                UpdateColor()
+            end
+        end
+        
+        -- Input connections
+        RInput.FocusLost:Connect(UpdateFromRGB)
+        GInput.FocusLost:Connect(UpdateFromRGB)
+        BInput.FocusLost:Connect(UpdateFromRGB)
+        HexInput.FocusLost:Connect(UpdateFromHex)
+        
+        -- SV Picker interaction
+        local svDragging = false
+        SVPicker.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                svDragging = true
+                -- Update on initial click
+                local relX = math.clamp((input.Position.X - SVPicker.AbsolutePosition.X) / SVPicker.AbsoluteSize.X, 0, 1)
+                local relY = math.clamp((input.Position.Y - SVPicker.AbsolutePosition.Y) / SVPicker.AbsoluteSize.Y, 0, 1)
+                s = relX
+                v = 1 - relY
+                UpdateColor()
+            end
+        end)
+        SVPicker.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                svDragging = false
+            end
+        end)
+        
+        -- Hue slider interaction
+        local hueDragging = false
+        HueSlider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                hueDragging = true
+                -- Update on initial click
+                local relY = math.clamp((input.Position.Y - HueSlider.AbsolutePosition.Y) / HueSlider.AbsoluteSize.Y, 0, 1)
+                h = relY
+                UpdateColor()
+            end
+        end)
+        HueSlider.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                hueDragging = false
+            end
+        end)
+        
+        -- Global input ended to stop dragging when mouse released anywhere
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                svDragging = false
+                hueDragging = false
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                if svDragging then
+                    local relX = math.clamp((input.Position.X - SVPicker.AbsolutePosition.X) / SVPicker.AbsoluteSize.X, 0, 1)
+                    local relY = math.clamp((input.Position.Y - SVPicker.AbsolutePosition.Y) / SVPicker.AbsoluteSize.Y, 0, 1)
+                    s = relX
+                    v = 1 - relY
+                    UpdateColor()
+                elseif hueDragging then
+                    local relY = math.clamp((input.Position.Y - HueSlider.AbsolutePosition.Y) / HueSlider.AbsoluteSize.Y, 0, 1)
+                    h = relY
+                    UpdateColor()
+                end
+            end
+        end)
+        
+        -- Toggle picker
+        ColorBtn.MouseButton1Click:Connect(function()
+            pickerOpen = not pickerOpen
+            if pickerOpen then
+                Tween(PickerPanel, 0.3, {Size = UDim2.new(1, 0, 0, 210)}, Enum.EasingStyle.Back)
+            else
+                Tween(PickerPanel, 0.2, {Size = UDim2.new(1, 0, 0, 0)})
+            end
+        end)
+        
+        -- Hover effects
+        ColorBtn.MouseEnter:Connect(function()
+            Tween(PickerFrame, 0.15, {BackgroundColor3 = Theme.CardHover})
+        end)
+        ColorBtn.MouseLeave:Connect(function()
+            Tween(PickerFrame, 0.15, {BackgroundColor3 = Theme.Card})
+        end)
+        
+        -- Return object with methods
+        return {
+            Frame = PickerFrame,
+            SetColor = function(color)
+                currentColor = color
+                h, s, v = RGBtoHSV(color)
+                UpdateColor()
+            end,
+            GetColor = function()
+                return currentColor
+            end
+        }
+    end
 
     -- Search Button Container
     UI.SearchBtnContainer = Create("Frame", {
@@ -905,6 +1369,76 @@ function MagicTulevo:CreateWindow(config)
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
         Tween(UI.ConfigsTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
+    end)
+
+    -- Custom Theme Button Container (between Configs and Settings)
+    UI.CustomBtnContainer = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 32, 0, 32),
+        ClipsDescendants = false,
+        Visible = false, -- Hidden by default, shown when Custom theme is selected
+        Parent = HeaderButtons
+    })
+    UI.CustomBtn = Create("TextButton", {
+        BackgroundColor3 = Theme.Card,
+        Size = UDim2.new(0, 32, 0, 32),
+        Font = Enum.Font.GothamBold,
+        Text = "",
+        TextColor3 = Theme.TextMuted,
+        TextSize = 16,
+        AutoButtonColor = false,
+        Parent = UI.CustomBtnContainer
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = UI.CustomBtn})
+    Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = UI.CustomBtn})
+    
+    -- Custom Icon (palette/brush icon)
+    UI.CustomIcon = Create("ImageLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 18, 0, 18),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Image = "rbxassetid://3926307971",
+        ImageRectOffset = Vector2.new(404, 164),
+        ImageRectSize = Vector2.new(36, 36),
+        ImageColor3 = Theme.TextMuted,
+        Parent = UI.CustomBtn
+    })
+    
+    -- Custom Tooltip
+    UI.CustomTooltip = Create("Frame", {
+        BackgroundColor3 = Theme.Secondary,
+        Size = UDim2.new(0, 0, 0, 26),
+        Position = UDim2.new(0, -6, 0.5, 0),
+        AnchorPoint = Vector2.new(1, 0.5),
+        ClipsDescendants = true,
+        Parent = UI.CustomBtnContainer
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = UI.CustomTooltip})
+    Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.5, Parent = UI.CustomTooltip})
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -10, 1, 0),
+        Position = UDim2.new(0, 5, 0, 0),
+        Font = Enum.Font.GothamMedium,
+        Text = "Custom",
+        TextColor3 = Theme.Text,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = UI.CustomTooltip
+    })
+    
+    -- Custom Button Hover
+    UI.CustomBtn.MouseEnter:Connect(function()
+        Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
+        Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.Accent})
+        Tween(UI.CustomTooltip, 0.3, {Size = UDim2.new(0, 65, 0, 26)}, Enum.EasingStyle.Back)
+        Tween(UI.CustomIcon, 0.3, {Rotation = 15}, Enum.EasingStyle.Quad)
+    end)
+    UI.CustomBtn.MouseLeave:Connect(function()
+        Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.Card})
+        Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
+        Tween(UI.CustomTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
     end)
 
     -- Settings Button Container
@@ -2466,8 +3000,19 @@ function MagicTulevo:CreateWindow(config)
                 Error = Color3.fromRGB(239, 68, 68),
                 Warning = Color3.fromRGB(245, 158, 11)
             }
+        },
+        -- Custom Theme (User Configurable)
+        {
+            Name = "Custom",
+            Description = "Create your own custom color scheme",
+            IsGradient = false,
+            IsCustom = true,
+            Colors = CustomThemeColors
         }
     }
+    
+    -- Custom Theme Index (last theme)
+    local CustomThemeIndex = #AllThemes
     
     if MagicTulevo.SavedSettings and MagicTulevo.SavedSettings.ThemeIndex then
         local savedIdx = MagicTulevo.SavedSettings.ThemeIndex
@@ -2479,8 +3024,20 @@ function MagicTulevo:CreateWindow(config)
     local SidePanel, ContentPanel, Divider
     
     ApplyTheme = function(themeData)
-        for key, value in pairs(themeData.Colors) do
-            Theme[key] = value
+        -- For Custom theme, use CustomThemeColors
+        if themeData.IsCustom then
+            for key, value in pairs(CustomThemeColors) do
+                Theme[key] = value
+            end
+        else
+            for key, value in pairs(themeData.Colors) do
+                Theme[key] = value
+            end
+        end
+        
+        -- Show/Hide Custom button based on theme
+        if UI.CustomBtnContainer then
+            UI.CustomBtnContainer.Visible = themeData.IsCustom == true
         end
         
         Main.BackgroundColor3 = Theme.Background
@@ -2583,10 +3140,12 @@ function MagicTulevo:CreateWindow(config)
         InfoOpen = false,
         ConfigsOpen = false,
         AccountOpen = false,
+        CustomOpen = false,
         SettingsTabContent = nil,
         InfoTabContent = nil,
         ConfigsTabContent = nil,
         AccountTabContent = nil,
+        CustomTabContent = nil,
         AccountPanel = nil
     }
 
@@ -2619,6 +3178,15 @@ function MagicTulevo:CreateWindow(config)
                     PanelState.AccountTabContent.Visible = false
                 end
                 Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+            end
+            -- Hide Custom tab if open
+            if PanelState.CustomOpen then
+                PanelState.CustomOpen = false
+                if PanelState.CustomTabContent then
+                    PanelState.CustomTabContent.Visible = false
+                end
+                Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.Card})
+                Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             end
             
             for _, t in pairs(Window.Tabs) do
@@ -2681,6 +3249,15 @@ function MagicTulevo:CreateWindow(config)
                     PanelState.AccountTabContent.Visible = false
                 end
                 Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+            end
+            -- Hide Custom tab if open
+            if PanelState.CustomOpen then
+                PanelState.CustomOpen = false
+                if PanelState.CustomTabContent then
+                    PanelState.CustomTabContent.Visible = false
+                end
+                Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.Card})
+                Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             end
             
             for _, t in pairs(Window.Tabs) do
@@ -2962,6 +3539,14 @@ function MagicTulevo:CreateWindow(config)
                 if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
                 Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted})
+            end
+            
+            -- Hide Custom if open
+            if PanelState.CustomOpen then
+                PanelState.CustomOpen = false
+                if PanelState.CustomTabContent then PanelState.CustomTabContent.Visible = false end
+                Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.Card})
+                Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             end
             
             -- Show Account tab
@@ -4534,6 +5119,412 @@ function MagicTulevo:CreateWindow(config)
         Parent = PanelState.ConfigsTabContent
     })
     
+    -- =====================================================
+    -- CUSTOM THEME TAB - Color Picker Panel
+    -- =====================================================
+    PanelState.CustomTabContent = Create("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        CanvasSize = UDim2.new(0, 0, 0, 900),
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.Accent,
+        ScrollBarImageTransparency = 0.3,
+        Visible = false,
+        BorderSizePixel = 0,
+        Parent = ContentContainer
+    })
+    local CustomLayout = Create("UIListLayout", {
+        Padding = UDim.new(0, 8),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = PanelState.CustomTabContent
+    })
+    
+    -- Auto-adjust canvas size based on content
+    CustomLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        PanelState.CustomTabContent.CanvasSize = UDim2.new(0, 0, 0, CustomLayout.AbsoluteContentSize.Y + 20)
+    end)
+    
+    -- Custom Theme Header
+    local CustomHeaderFrame = Create("Frame", {
+        BackgroundColor3 = Theme.Card,
+        Size = UDim2.new(1, 0, 0, 60),
+        LayoutOrder = 0,
+        Parent = PanelState.CustomTabContent
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = CustomHeaderFrame})
+    Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.5, Parent = CustomHeaderFrame})
+    
+    local CustomHeaderIcon = Create("ImageLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 32, 0, 32),
+        Position = UDim2.new(0, 14, 0.5, -16),
+        Image = "rbxassetid://3926307971",
+        ImageRectOffset = Vector2.new(404, 164),
+        ImageRectSize = Vector2.new(36, 36),
+        ImageColor3 = Theme.Accent,
+        Parent = CustomHeaderFrame
+    })
+    
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -60, 0, 22),
+        Position = UDim2.new(0, 56, 0, 10),
+        Font = Enum.Font.GothamBold,
+        Text = "Custom Theme Editor",
+        TextColor3 = Theme.Text,
+        TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = CustomHeaderFrame
+    })
+    
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -60, 0, 16),
+        Position = UDim2.new(0, 56, 0, 34),
+        Font = Enum.Font.Gotham,
+        Text = "Customize every color in the UI",
+        TextColor3 = Theme.TextMuted,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = CustomHeaderFrame
+    })
+    
+    -- Color Pickers Storage
+    local ColorPickers = {}
+    
+    -- Function to update custom theme and apply
+    local function UpdateCustomTheme(colorKey, newColor)
+        CustomThemeColors[colorKey] = newColor
+        -- Update the Custom theme in AllThemes
+        AllThemes[CustomThemeIndex].Colors = CustomThemeColors
+        -- If Custom theme is currently active, apply changes
+        if CurrentThemeIndex == CustomThemeIndex then
+            ApplyTheme(AllThemes[CustomThemeIndex])
+        end
+    end
+    
+    -- Background Colors Section
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = "BACKGROUND COLORS",
+        TextColor3 = Theme.TextDark,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 1,
+        Parent = PanelState.CustomTabContent
+    })
+    
+    ColorPickers.Background = CreateColorPicker(PanelState.CustomTabContent, "Background", CustomThemeColors.Background, function(c)
+        UpdateCustomTheme("Background", c)
+    end)
+    ColorPickers.Background.Frame.LayoutOrder = 2
+    
+    ColorPickers.Secondary = CreateColorPicker(PanelState.CustomTabContent, "Secondary", CustomThemeColors.Secondary, function(c)
+        UpdateCustomTheme("Secondary", c)
+    end)
+    ColorPickers.Secondary.Frame.LayoutOrder = 3
+    
+    ColorPickers.Card = CreateColorPicker(PanelState.CustomTabContent, "Card", CustomThemeColors.Card, function(c)
+        UpdateCustomTheme("Card", c)
+    end)
+    ColorPickers.Card.Frame.LayoutOrder = 4
+    
+    ColorPickers.CardHover = CreateColorPicker(PanelState.CustomTabContent, "Card Hover", CustomThemeColors.CardHover, function(c)
+        UpdateCustomTheme("CardHover", c)
+    end)
+    ColorPickers.CardHover.Frame.LayoutOrder = 5
+    
+    ColorPickers.Border = CreateColorPicker(PanelState.CustomTabContent, "Border", CustomThemeColors.Border, function(c)
+        UpdateCustomTheme("Border", c)
+    end)
+    ColorPickers.Border.Frame.LayoutOrder = 6
+    
+    -- Accent Colors Section
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = "ACCENT COLORS",
+        TextColor3 = Theme.TextDark,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 7,
+        Parent = PanelState.CustomTabContent
+    })
+    
+    ColorPickers.Accent = CreateColorPicker(PanelState.CustomTabContent, "Accent", CustomThemeColors.Accent, function(c)
+        UpdateCustomTheme("Accent", c)
+    end)
+    ColorPickers.Accent.Frame.LayoutOrder = 8
+    
+    ColorPickers.AccentDark = CreateColorPicker(PanelState.CustomTabContent, "Accent Dark", CustomThemeColors.AccentDark, function(c)
+        UpdateCustomTheme("AccentDark", c)
+    end)
+    ColorPickers.AccentDark.Frame.LayoutOrder = 9
+    
+    ColorPickers.AccentGlow = CreateColorPicker(PanelState.CustomTabContent, "Accent Glow", CustomThemeColors.AccentGlow, function(c)
+        UpdateCustomTheme("AccentGlow", c)
+    end)
+    ColorPickers.AccentGlow.Frame.LayoutOrder = 10
+    
+    -- Text Colors Section
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = "TEXT COLORS",
+        TextColor3 = Theme.TextDark,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 11,
+        Parent = PanelState.CustomTabContent
+    })
+    
+    ColorPickers.Text = CreateColorPicker(PanelState.CustomTabContent, "Text", CustomThemeColors.Text, function(c)
+        UpdateCustomTheme("Text", c)
+    end)
+    ColorPickers.Text.Frame.LayoutOrder = 12
+    
+    ColorPickers.TextMuted = CreateColorPicker(PanelState.CustomTabContent, "Text Muted", CustomThemeColors.TextMuted, function(c)
+        UpdateCustomTheme("TextMuted", c)
+    end)
+    ColorPickers.TextMuted.Frame.LayoutOrder = 13
+    
+    ColorPickers.TextDark = CreateColorPicker(PanelState.CustomTabContent, "Text Dark", CustomThemeColors.TextDark, function(c)
+        UpdateCustomTheme("TextDark", c)
+    end)
+    ColorPickers.TextDark.Frame.LayoutOrder = 14
+    
+    -- Status Colors Section
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = "STATUS COLORS",
+        TextColor3 = Theme.TextDark,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 15,
+        Parent = PanelState.CustomTabContent
+    })
+    
+    ColorPickers.Success = CreateColorPicker(PanelState.CustomTabContent, "Success", CustomThemeColors.Success, function(c)
+        UpdateCustomTheme("Success", c)
+    end)
+    ColorPickers.Success.Frame.LayoutOrder = 16
+    
+    ColorPickers.Error = CreateColorPicker(PanelState.CustomTabContent, "Error", CustomThemeColors.Error, function(c)
+        UpdateCustomTheme("Error", c)
+    end)
+    ColorPickers.Error.Frame.LayoutOrder = 17
+    
+    ColorPickers.Warning = CreateColorPicker(PanelState.CustomTabContent, "Warning", CustomThemeColors.Warning, function(c)
+        UpdateCustomTheme("Warning", c)
+    end)
+    ColorPickers.Warning.Frame.LayoutOrder = 18
+    
+    -- Preset Buttons Section
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = "QUICK PRESETS",
+        TextColor3 = Theme.TextDark,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 19,
+        Parent = PanelState.CustomTabContent
+    })
+    
+    local PresetContainer = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 36),
+        LayoutOrder = 20,
+        Parent = PanelState.CustomTabContent
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        Padding = UDim.new(0, 8),
+        Parent = PresetContainer
+    })
+    
+    local function CreatePresetButton(name, colors)
+        local btn = Create("TextButton", {
+            BackgroundColor3 = colors.Accent,
+            Size = UDim2.new(0, 80, 0, 32),
+            Font = Enum.Font.GothamMedium,
+            Text = name,
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            TextSize = 11,
+            AutoButtonColor = false,
+            Parent = PresetContainer
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = btn})
+        
+        btn.MouseEnter:Connect(function()
+            Tween(btn, 0.15, {Size = UDim2.new(0, 84, 0, 34)})
+        end)
+        btn.MouseLeave:Connect(function()
+            Tween(btn, 0.15, {Size = UDim2.new(0, 80, 0, 32)})
+        end)
+        btn.MouseButton1Click:Connect(function()
+            for key, color in pairs(colors) do
+                CustomThemeColors[key] = color
+                if ColorPickers[key] then
+                    ColorPickers[key].SetColor(color)
+                end
+            end
+            AllThemes[CustomThemeIndex].Colors = CustomThemeColors
+            if CurrentThemeIndex == CustomThemeIndex then
+                ApplyTheme(AllThemes[CustomThemeIndex])
+            end
+            MagicTulevo:Notify({Title = "Preset Applied", Message = name .. " colors loaded!", Type = "Success", Duration = 2})
+        end)
+        return btn
+    end
+    
+    -- Quick preset buttons
+    CreatePresetButton("Purple", {
+        Background = Color3.fromRGB(13, 13, 18),
+        Secondary = Color3.fromRGB(18, 18, 25),
+        Card = Color3.fromRGB(24, 24, 34),
+        CardHover = Color3.fromRGB(32, 32, 45),
+        Accent = Color3.fromRGB(138, 92, 246),
+        AccentDark = Color3.fromRGB(108, 62, 216),
+        AccentGlow = Color3.fromRGB(168, 122, 255),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextMuted = Color3.fromRGB(140, 140, 165),
+        TextDark = Color3.fromRGB(90, 90, 110),
+        Border = Color3.fromRGB(38, 38, 52),
+        Success = Color3.fromRGB(34, 197, 94),
+        Error = Color3.fromRGB(239, 68, 68),
+        Warning = Color3.fromRGB(245, 158, 11)
+    })
+    
+    CreatePresetButton("Blue", {
+        Background = Color3.fromRGB(10, 15, 25),
+        Secondary = Color3.fromRGB(15, 22, 35),
+        Card = Color3.fromRGB(20, 30, 48),
+        CardHover = Color3.fromRGB(28, 42, 65),
+        Accent = Color3.fromRGB(59, 130, 246),
+        AccentDark = Color3.fromRGB(37, 99, 235),
+        AccentGlow = Color3.fromRGB(96, 165, 250),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextMuted = Color3.fromRGB(148, 163, 184),
+        TextDark = Color3.fromRGB(71, 85, 105),
+        Border = Color3.fromRGB(30, 41, 59),
+        Success = Color3.fromRGB(34, 197, 94),
+        Error = Color3.fromRGB(239, 68, 68),
+        Warning = Color3.fromRGB(245, 158, 11)
+    })
+    
+    CreatePresetButton("Red", {
+        Background = Color3.fromRGB(18, 10, 12),
+        Secondary = Color3.fromRGB(25, 15, 18),
+        Card = Color3.fromRGB(38, 22, 26),
+        CardHover = Color3.fromRGB(52, 30, 36),
+        Accent = Color3.fromRGB(239, 68, 68),
+        AccentDark = Color3.fromRGB(185, 28, 28),
+        AccentGlow = Color3.fromRGB(252, 129, 129),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextMuted = Color3.fromRGB(175, 140, 145),
+        TextDark = Color3.fromRGB(115, 80, 85),
+        Border = Color3.fromRGB(52, 32, 38),
+        Success = Color3.fromRGB(34, 197, 94),
+        Error = Color3.fromRGB(239, 68, 68),
+        Warning = Color3.fromRGB(245, 158, 11)
+    })
+    
+    CreatePresetButton("Green", {
+        Background = Color3.fromRGB(10, 18, 15),
+        Secondary = Color3.fromRGB(15, 25, 20),
+        Card = Color3.fromRGB(20, 35, 28),
+        CardHover = Color3.fromRGB(28, 48, 38),
+        Accent = Color3.fromRGB(16, 185, 129),
+        AccentDark = Color3.fromRGB(5, 150, 105),
+        AccentGlow = Color3.fromRGB(52, 211, 153),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextMuted = Color3.fromRGB(134, 169, 154),
+        TextDark = Color3.fromRGB(74, 109, 94),
+        Border = Color3.fromRGB(30, 50, 40),
+        Success = Color3.fromRGB(34, 197, 94),
+        Error = Color3.fromRGB(239, 68, 68),
+        Warning = Color3.fromRGB(245, 158, 11)
+    })
+    
+    -- Custom Button Click Handler
+    UI.CustomBtn.MouseButton1Click:Connect(function()
+        PanelState.CustomOpen = not PanelState.CustomOpen
+        if PanelState.CustomOpen then
+            -- Hide other tabs
+            for _, t in pairs(Window.Tabs) do
+                if t.Content.Visible then
+                    t.Content.Visible = false
+                    Tween(t.Button, 0.25, {BackgroundTransparency = 1})
+                    Tween(t.Label, 0.25, {TextColor3 = Theme.TextMuted})
+                    Tween(t.Indicator, 0.25, {Size = UDim2.new(0, 3, 0, 0)})
+                    Tween(t.Glow, 0.25, {BackgroundTransparency = 1})
+                    if t.Icon then Tween(t.Icon, 0.25, {ImageColor3 = Theme.TextMuted}) end
+                end
+            end
+            Window.CurrentTab = nil
+            
+            -- Hide Settings if open
+            if PanelState.SettingsOpen then
+                PanelState.SettingsOpen = false
+                if PanelState.SettingsTabContent then PanelState.SettingsTabContent.Visible = false end
+                Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
+                Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
+            end
+            
+            -- Hide Info if open
+            if PanelState.InfoOpen then
+                PanelState.InfoOpen = false
+                if PanelState.InfoTabContent then PanelState.InfoTabContent.Visible = false end
+                Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
+                Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
+            end
+            
+            -- Hide Configs if open
+            if PanelState.ConfigsOpen then
+                PanelState.ConfigsOpen = false
+                if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
+                Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
+                Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted})
+            end
+            
+            -- Hide Account if open
+            if PanelState.AccountOpen then
+                PanelState.AccountOpen = false
+                if PanelState.AccountTabContent then PanelState.AccountTabContent.Visible = false end
+                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+            end
+            
+            -- Show Custom tab
+            if PanelState.CustomTabContent then
+                PanelState.CustomTabContent.Visible = true
+                PanelState.CustomTabContent.Position = UDim2.new(0.05, 0, 0, 0)
+                Tween(PanelState.CustomTabContent, 0.35, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
+            end
+            Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.Accent})
+            Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.Text})
+        else
+            -- Hide Custom tab and show first user tab
+            if PanelState.CustomTabContent then
+                PanelState.CustomTabContent.Visible = false
+            end
+            Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.Card})
+            Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.TextMuted})
+            
+            if Window.Tabs[1] then
+                Window.Tabs[1]:Select()
+            end
+        end
+    end)
+    
     -- Info Button Click Handler
     UI.InfoBtn.MouseButton1Click:Connect(function()
         PanelState.InfoOpen = not PanelState.InfoOpen
@@ -4567,6 +5558,16 @@ function MagicTulevo:CreateWindow(config)
                 end
                 Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted})
+            end
+            
+            -- Hide Custom if open
+            if PanelState.CustomOpen then
+                PanelState.CustomOpen = false
+                if PanelState.CustomTabContent then
+                    PanelState.CustomTabContent.Visible = false
+                end
+                Tween(UI.CustomBtn, 0.2, {BackgroundColor3 = Theme.Card})
+                Tween(UI.CustomIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             end
             
             -- Hide Account if open
@@ -4727,12 +5728,19 @@ function MagicTulevo:CreateWindow(config)
                     end
                 end
                 
+                -- Convert CustomThemeColors to saveable format
+                local customColorsToSave = {}
+                for key, color in pairs(CustomThemeColors) do
+                    customColorsToSave[key] = {math.floor(color.R * 255), math.floor(color.G * 255), math.floor(color.B * 255)}
+                end
+                
                 local settingsToSave = {
                     ThemeIndex = CurrentThemeIndex,
                     ToggleKey = toggleKey.Name,
                     WindowPosition = {Main.Position.X.Offset, Main.Position.Y.Offset},
                     WindowSize = {Main.Size.X.Offset, Main.Size.Y.Offset},
-                    Toggles = toggleStates
+                    Toggles = toggleStates,
+                    CustomThemeColors = customColorsToSave
                 }
                 SaveSettings(settingsToSave)
                 
@@ -5564,10 +6572,17 @@ function MagicTulevo:CreateWindow(config)
     
     -- Window destroy function
     function Window:Destroy()
+        -- Convert CustomThemeColors to saveable format
+        local customColorsToSave = {}
+        for key, color in pairs(CustomThemeColors) do
+            customColorsToSave[key] = {math.floor(color.R * 255), math.floor(color.G * 255), math.floor(color.B * 255)}
+        end
+        
         -- Save settings before destroying
         local settingsToSave = {
             ThemeIndex = CurrentThemeIndex,
-            ToggleKey = toggleKey.Name
+            ToggleKey = toggleKey.Name,
+            CustomThemeColors = customColorsToSave
         }
         SaveSettings(settingsToSave)
         
