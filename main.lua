@@ -2949,7 +2949,9 @@ function MagicTulevo:CreateWindow(config)
                 if PanelState.AccountTabContent then
                     PanelState.AccountTabContent.Visible = false
                 end
-                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                if PanelState.AccountPanel then
+                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                end
             end
             
             for _, t in pairs(Window.Tabs) do
@@ -3011,7 +3013,9 @@ function MagicTulevo:CreateWindow(config)
                 if PanelState.AccountTabContent then
                     PanelState.AccountTabContent.Visible = false
                 end
-                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                if PanelState.AccountPanel then
+                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                end
             end
             
             for _, t in pairs(Window.Tabs) do
@@ -5098,7 +5102,9 @@ function MagicTulevo:CreateWindow(config)
                 if PanelState.AccountTabContent then
                     PanelState.AccountTabContent.Visible = false
                 end
-                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                if PanelState.AccountPanel then
+                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                end
             end
             
             -- Show Info tab
@@ -5429,7 +5435,9 @@ function MagicTulevo:CreateWindow(config)
                 if PanelState.AccountTabContent then
                     PanelState.AccountTabContent.Visible = false
                 end
-                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                if PanelState.AccountPanel then
+                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
+                end
             end
             
             for _, t in pairs(Window.Tabs) do
