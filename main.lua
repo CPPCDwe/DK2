@@ -914,21 +914,22 @@ function MagicTulevo:CreateWindow(config)
         Parent = UI.ConfigsTooltip
     })
     
-    -- Configs Button Hover - Full animation with rotation
+    -- Configs Button Hover - Smooth oscillating rotation
     UI.ConfigsBtn.MouseEnter:Connect(function()
         if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.ConfigsTooltip, 0.3, {Size = UDim2.new(0, 65, 0, 26)}, Enum.EasingStyle.Back)
-        -- Continuous rotation animation
+        -- Smooth oscillating rotation (pendulum effect)
         if MagicTulevo.AnimationSettings.EnableAnimations then
             UI.configsIconRotating = true
             task.spawn(function()
-                local rotation = 0
+                local startTime = tick()
                 while UI.configsIconRotating do
-                    rotation = (rotation + 2) % 360
-                    UI.ConfigsIcon.Rotation = math.sin(math.rad(rotation)) * 15
-                    task.wait(0.016)
+                    local elapsed = tick() - startTime
+                    -- Smooth sine wave oscillation: -15° to +15°
+                    UI.ConfigsIcon.Rotation = math.sin(elapsed * 3) * 15
+                    task.wait()
                 end
             end)
         end
@@ -1049,22 +1050,22 @@ function MagicTulevo:CreateWindow(config)
         Parent = UI.InfoTooltip
     })
     
-    -- Info Button Hover - Full shake animation
+    -- Info Button Hover - Smooth shake animation
     UI.InfoBtn.MouseEnter:Connect(function()
         if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.Accent})
         Tween(UI.InfoTooltip, 0.3, {Size = UDim2.new(0, 50, 0, 26)}, Enum.EasingStyle.Back)
-        -- Shake animation
+        -- Smooth shake animation (rotation oscillation)
         if MagicTulevo.AnimationSettings.EnableAnimations then
             UI.infoShaking = true
             task.spawn(function()
-                local shakeAmount = 0
+                local startTime = tick()
                 while UI.infoShaking do
-                    shakeAmount = shakeAmount + 0.3
-                    local offset = math.sin(shakeAmount) * 3
-                    UI.InfoIcon.Position = UDim2.new(0.5, offset, 0.5, 0)
-                    task.wait(0.016)
+                    local elapsed = tick() - startTime
+                    -- Fast rotation shake: -8° to +8°
+                    UI.InfoIcon.Rotation = math.sin(elapsed * 20) * 8
+                    task.wait()
                 end
             end)
         end
@@ -1072,9 +1073,8 @@ function MagicTulevo:CreateWindow(config)
     UI.InfoBtn.MouseLeave:Connect(function()
         UI.infoShaking = false
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
-        Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
+        Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted, Rotation = 0})
         Tween(UI.InfoTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
-        UI.InfoIcon.Position = UDim2.new(0, 0, 0, 0)
     end)
 
     -- Minimize Button Container (between Info and Close)
@@ -1191,26 +1191,32 @@ function MagicTulevo:CreateWindow(config)
     Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = UI.CloseBtn})
     Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = UI.CloseBtn})
     
-    -- Search Button Hover - Full animation with rotation
+    -- Search Button Hover - Clean backflip animation
     UI.SearchBtn.MouseEnter:Connect(function()
         if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SearchTooltip, 0.3, {Size = UDim2.new(0, 60, 0, 26)}, Enum.EasingStyle.Back)
-        -- Full rotation animation (backflip)
+        -- Clean backflip animation (single 360° rotation)
         if MagicTulevo.AnimationSettings.EnableAnimations then
             UI.searchAnimating = true
+            UI.SearchIcon.Rotation = 0
             task.spawn(function()
                 while UI.searchAnimating do
-                    Tween(UI.SearchIcon, 0.3, {Rotation = 360, Size = UDim2.new(0, 18, 0, 18)}, Enum.EasingStyle.Quint)
-                    task.wait(0.35)
+                    -- Backflip: rotate from 0 to 360
+                    local startRot = 0
+                    local duration = 0.5
+                    local startTime = tick()
+                    while UI.searchAnimating and (tick() - startTime) < duration do
+                        local progress = (tick() - startTime) / duration
+                        -- Ease out quad for smooth deceleration
+                        local eased = 1 - (1 - progress) * (1 - progress)
+                        UI.SearchIcon.Rotation = startRot + (360 * eased)
+                        task.wait()
+                    end
                     if not UI.searchAnimating then break end
                     UI.SearchIcon.Rotation = 0
-                    Tween(UI.SearchIcon, 0.2, {Position = UDim2.new(0.5, 0, 0.5, -4)}, Enum.EasingStyle.Back)
-                    task.wait(0.25)
-                    if not UI.searchAnimating then break end
-                    Tween(UI.SearchIcon, 0.2, {Position = UDim2.new(0.5, 0, 0.5, 0)}, Enum.EasingStyle.Quint)
-                    task.wait(0.3)
+                    task.wait(0.3) -- Pause before next flip
                 end
             end)
         end
@@ -1218,29 +1224,28 @@ function MagicTulevo:CreateWindow(config)
     UI.SearchBtn.MouseLeave:Connect(function()
         UI.searchAnimating = false
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.Card})
-        Tween(UI.SearchIcon, 0.2, {
-            ImageColor3 = Theme.TextMuted,
-            Position = UDim2.new(0.5, 0, 0.5, 0),
-            Rotation = 0,
-            Size = UDim2.new(0, 16, 0, 16)
-        })
+        Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
         Tween(UI.SearchTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
     end)
     
-    -- Settings Button Hover - Full rotation animation
+    -- Settings Button Hover - Smooth gear rotation
     UI.SettingsBtn.MouseEnter:Connect(function()
         if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SettingsTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
-        -- Continuous rotation animation
+        -- Smooth continuous rotation
         if MagicTulevo.AnimationSettings.EnableAnimations then
             UI.gearRotating = true
+            UI.gearRotation = UI.GearIcon.Rotation or 0
             task.spawn(function()
+                local lastTime = tick()
                 while UI.gearRotating do
-                    UI.gearRotation = (UI.gearRotation + 3) % 360
+                    local dt = tick() - lastTime
+                    lastTime = tick()
+                    UI.gearRotation = (UI.gearRotation + 90 * dt) % 360
                     UI.GearIcon.Rotation = UI.gearRotation
-                    task.wait(0.016)
+                    task.wait()
                 end
             end)
         end
@@ -1248,9 +1253,8 @@ function MagicTulevo:CreateWindow(config)
     UI.SettingsBtn.MouseLeave:Connect(function()
         UI.gearRotating = false
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
-        Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
+        Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
         Tween(UI.SettingsTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
-        Tween(UI.GearIcon, 0.3, {Rotation = 0})
     end)
     
     UI.CloseBtn.MouseEnter:Connect(function()
