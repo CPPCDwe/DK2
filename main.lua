@@ -1181,12 +1181,6 @@ function MagicTulevo:CreateWindow(config)
             if ContentPanel then ContentPanel.Visible = false end
             if Divider then Divider.Visible = false end
             
-            -- Hide all special tabs
-            if PanelState.SettingsTabContent then PanelState.SettingsTabContent.Visible = false end
-            if PanelState.InfoTabContent then PanelState.InfoTabContent.Visible = false end
-            if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
-            if PanelState.AccountTabContent then PanelState.AccountTabContent.Visible = false end
-            
             -- Animate to minimized size
             Tween(Main, 0.3, {Size = UDim2.new(0, Main.Size.X.Offset, 0, 63)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
         else
@@ -1204,14 +1198,6 @@ function MagicTulevo:CreateWindow(config)
                 -- Restore the current tab or first tab
                 if Window.CurrentTab then
                     Window.CurrentTab.Content.Visible = true
-                elseif PanelState.SettingsOpen and PanelState.SettingsTabContent then
-                    PanelState.SettingsTabContent.Visible = true
-                elseif PanelState.InfoOpen and PanelState.InfoTabContent then
-                    PanelState.InfoTabContent.Visible = true
-                elseif PanelState.ConfigsOpen and PanelState.ConfigsTabContent then
-                    PanelState.ConfigsTabContent.Visible = true
-                elseif PanelState.AccountOpen and PanelState.AccountTabContent then
-                    PanelState.AccountTabContent.Visible = true
                 elseif #Window.Tabs > 0 then
                     Window.Tabs[1]:Select()
                 end
@@ -1671,7 +1657,20 @@ function MagicTulevo:CreateWindow(config)
                     Parent = DotsContainer
                 })
                 
-                local paletteColors = {themeData.Colors.Accent, themeData.Colors.AccentDark, themeData.Colors.AccentGlow}
+                -- Use gradient colors for gradient themes, otherwise use accent colors
+                local paletteColors
+                if themeData.IsGradient and themeData.GradientColors and #themeData.GradientColors >= 2 then
+                    paletteColors = {}
+                    for j = 1, math.min(3, #themeData.GradientColors) do
+                        table.insert(paletteColors, themeData.GradientColors[j])
+                    end
+                    if #paletteColors < 3 then
+                        table.insert(paletteColors, themeData.Colors.AccentGlow)
+                    end
+                else
+                    paletteColors = {themeData.Colors.Accent, themeData.Colors.AccentDark, themeData.Colors.AccentGlow}
+                end
+                
                 for _, color in ipairs(paletteColors) do
                     local Dot = Create("Frame", {
                         BackgroundColor3 = color,
@@ -3726,46 +3725,12 @@ function MagicTulevo:CreateWindow(config)
         })
         Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = ThemeBgGradient})
         
-        -- Add animated gradient overlay
-        local GradientOverlay = Create("Frame", {
-            BackgroundTransparency = 0.85,
-            BackgroundColor3 = themeData.Colors.Accent,
-            Size = UDim2.new(2, 0, 2, 0),
-            Position = UDim2.new(-0.5, 0, -0.5, 0),
-            ZIndex = 1,
-            Parent = ThemeBtn
-        })
-        
-        local themeGradientColors
-        if themeData.IsGradient and themeData.GradientColors then
-            local keypoints = {}
-            for j, color in ipairs(themeData.GradientColors) do
-                table.insert(keypoints, ColorSequenceKeypoint.new((j-1)/(#themeData.GradientColors-1), color))
-            end
-            themeGradientColors = ColorSequence.new(keypoints)
-        else
-            themeGradientColors = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, themeData.Colors.Accent),
-                ColorSequenceKeypoint.new(0.5, themeData.Colors.AccentGlow),
-                ColorSequenceKeypoint.new(1, themeData.Colors.AccentDark)
-            })
-        end
-        
-        local ThemePreviewGradient = Create("UIGradient", {
-            Color = themeGradientColors,
-            Rotation = themeData.GradientRotation or 45,
-            Parent = GradientOverlay
-        })
-        
-        -- OPTIMIZED: Removed gradient animation for theme buttons to reduce startup lag
-        -- Animation only starts when hovering over theme button
-        
-        -- Theme preview bar
+        -- Theme preview bar at top
         local PreviewBar = Create("Frame", {
             BackgroundColor3 = themeData.Colors.Accent,
             Size = UDim2.new(1, 0, 0, 4),
             Position = UDim2.new(0, 0, 0, 0),
-            ZIndex = 2,
+            ZIndex = 3,
             Parent = ThemeBtn
         })
         Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = PreviewBar})
@@ -3787,7 +3752,7 @@ function MagicTulevo:CreateWindow(config)
             BackgroundTransparency = 1,
             Size = UDim2.new(1, -10, 0, 14),
             Position = UDim2.new(0, 5, 0, 10),
-            ZIndex = 2,
+            ZIndex = 5,
             Parent = ThemeBtn
         })
         Create("UIListLayout", {
@@ -3816,7 +3781,7 @@ function MagicTulevo:CreateWindow(config)
             local Dot = Create("Frame", {
                 BackgroundColor3 = color,
                 Size = UDim2.new(0, 12, 0, 12),
-                ZIndex = 2,
+                ZIndex = 6,
                 Parent = DotsContainer
             })
             Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = Dot})
