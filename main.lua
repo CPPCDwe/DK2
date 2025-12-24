@@ -721,6 +721,14 @@ function MagicTulevo:CreateWindow(config)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = Header
     })
+    
+    -- Store references for dynamic updates
+    Window.TitleLabel = TitleLabel
+    Window.SubTitleLabel = SubTitleLabel
+    Window.LogoLabel = LogoLabel
+    Window.Title = title
+    Window.SubTitle = subtitle
+    Window.Logo = logoText
 
     local HeaderButtons = Create("Frame", {
         BackgroundTransparency = 1,
@@ -4761,21 +4769,9 @@ function MagicTulevo:CreateWindow(config)
         end)
     end)
 
-    function Window:SetTitle(t) TitleLabel.Text = t end
-    function Window:SetSubTitle(t) SubTitleLabel.Text = t end
-    function Window:SetLogo(t) LogoLabel.Text = t LogoLabel.TextSize = #t > 1 and 16 or 20 end
     function Window:Reload()
         for _, tog in pairs(Window.Toggles) do if tog.Value then tog:Set(false) end end
         ScreenGui:Destroy()
-    end
-    function Window:Destroy()
-        PlaySound("rbxassetid://6895079853", 0.3)
-        local currentSize = Main.Size
-        Tween(Main, 0.3, {
-            Size = UDim2.new(0, currentSize.X.Offset * 0.9, 0, currentSize.Y.Offset * 0.9),
-            BackgroundTransparency = 1
-        }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-        task.delay(0.3, function() ScreenGui:Destroy() end)
     end
 
     function Window:CreateTab(tabConfig)
@@ -5497,6 +5493,74 @@ function MagicTulevo:CreateWindow(config)
     
     -- Add window to global list
     table.insert(MagicTulevo.Windows, Window)
+    
+    -- ═══════════════════════════════════════════════════════════════
+    -- DYNAMIC WINDOW CUSTOMIZATION METHODS
+    -- ═══════════════════════════════════════════════════════════════
+    
+    -- Set window title with animation
+    function Window:SetTitle(newTitle)
+        if not newTitle or newTitle == "" then return end
+        Window.Title = newTitle
+        if Window.TitleLabel then
+            -- Animate title change
+            Tween(Window.TitleLabel, 0.15, {TextTransparency = 1})
+            task.delay(0.15, function()
+                Window.TitleLabel.Text = newTitle
+                Tween(Window.TitleLabel, 0.2, {TextTransparency = 0})
+            end)
+        end
+    end
+    
+    -- Set window subtitle with animation
+    function Window:SetSubTitle(newSubTitle)
+        if not newSubTitle then return end
+        Window.SubTitle = newSubTitle
+        if Window.SubTitleLabel then
+            -- Animate subtitle change
+            Tween(Window.SubTitleLabel, 0.15, {TextTransparency = 1})
+            task.delay(0.15, function()
+                Window.SubTitleLabel.Text = newSubTitle
+                Tween(Window.SubTitleLabel, 0.2, {TextTransparency = 0})
+            end)
+        end
+    end
+    
+    -- Set window logo (1-2 letters) with animation
+    function Window:SetLogo(newLogo)
+        if not newLogo or newLogo == "" then return end
+        -- Limit to 2 characters
+        newLogo = string.sub(newLogo, 1, 2)
+        Window.Logo = newLogo
+        if Window.LogoLabel then
+            -- Animate logo change with scale effect
+            Tween(Window.LogoLabel, 0.15, {TextTransparency = 1, Size = UDim2.new(0.5, 0, 0.5, 0)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+            task.delay(0.15, function()
+                Window.LogoLabel.Text = newLogo
+                -- Adjust text size based on logo length
+                Window.LogoLabel.TextSize = #newLogo > 1 and 16 or 20
+                Window.LogoLabel.Size = UDim2.new(1, 0, 1, 0)
+                Tween(Window.LogoLabel, 0.25, {TextTransparency = 0}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            end)
+        end
+    end
+    
+    -- Set all window info at once
+    function Window:SetWindowInfo(info)
+        info = info or {}
+        if info.Title then Window:SetTitle(info.Title) end
+        if info.SubTitle then Window:SetSubTitle(info.SubTitle) end
+        if info.Logo then Window:SetLogo(info.Logo) end
+    end
+    
+    -- Get current window info
+    function Window:GetWindowInfo()
+        return {
+            Title = Window.Title,
+            SubTitle = Window.SubTitle,
+            Logo = Window.Logo
+        }
+    end
     
     -- Window destroy function
     function Window:Destroy()
