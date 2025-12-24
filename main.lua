@@ -4533,21 +4533,23 @@ function MagicTulevo:CreateWindow(config)
         Parent = PanelState.InfoTabContent
     })
     
-    -- Lead Developer Card with premium design
+    -- ═══════════════════════════════════════════════════════════════
+    -- LEAD DEVELOPER CARD - Premium Design
+    -- ═══════════════════════════════════════════════════════════════
     local LeadDevFrame = Create("Frame", {
         BackgroundColor3 = Theme.Card,
-        Size = UDim2.new(1, 0, 0, 90),
+        Size = UDim2.new(1, 0, 0, 100),
         LayoutOrder = 6,
         ClipsDescendants = true,
         Parent = PanelState.InfoTabContent
     })
-    Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = LeadDevFrame})
+    Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = LeadDevFrame})
     
-    -- Premium gradient border for lead dev
+    -- Premium animated gradient border
     local LeadDevStroke = Create("UIStroke", {
         Color = Theme.Accent,
         Thickness = 2,
-        Transparency = 0.3,
+        Transparency = 0.2,
         Parent = LeadDevFrame
     })
     
@@ -4569,163 +4571,181 @@ function MagicTulevo:CreateWindow(config)
         Parent = LeadDevShimmer
     })
     
-    -- Lead Dev shimmer animation using consolidated animation loop
+    -- Lead Dev shimmer animation
     RegisterGradientAnimation(LeadDevShimmerGrad, 0.2)
     
-    -- Crown badge for lead dev
+    -- Number badge with gradient (orange/gold)
     local LeadDevBadge = Create("Frame", {
-        BackgroundColor3 = Theme.Accent,
-        Size = UDim2.new(0, 50, 0, 50),
-        Position = UDim2.new(0, 16, 0.5, -25),
+        BackgroundColor3 = Color3.fromRGB(255, 140, 50),
+        Size = UDim2.new(0, 56, 0, 56),
+        Position = UDim2.new(0, 18, 0.5, -28),
         Parent = LeadDevFrame
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = LeadDevBadge})
     Create("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 165, 0)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 215, 0))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 160, 60)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 120, 40)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 160, 60))
         }),
         Rotation = 45,
         Parent = LeadDevBadge
     })
-    AddGlow(LeadDevBadge, Color3.fromRGB(255, 215, 0), 20)
+    AddGlow(LeadDevBadge, Color3.fromRGB(255, 140, 50), 25)
     
+    -- Number "1"
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBlack,
         Text = "1",
-        TextColor3 = Color3.fromRGB(30, 30, 30),
-        TextSize = 22,
+        TextColor3 = Color3.fromRGB(40, 40, 40),
+        TextSize = 26,
         Parent = LeadDevBadge
     })
     
-    -- Lead dev info
+    -- Developer name
     Create("TextLabel", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(0, 200, 0, 20),
-        Position = UDim2.new(0, 78, 0, 14),
+        Size = UDim2.new(0, 250, 0, 24),
+        Position = UDim2.new(0, 88, 0, 16),
         Font = Enum.Font.GothamBlack,
         Text = "tsunamioffical",
         TextColor3 = Theme.Text,
-        TextSize = 16,
+        TextSize = 18,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = LeadDevFrame
     })
     
-    -- Role badge
+    -- Role badge (orange)
     local LeadRoleBadge = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(255, 215, 0),
-        BackgroundTransparency = 0.8,
-        Size = UDim2.new(0, 100, 0, 20),
-        Position = UDim2.new(0, 78, 0, 36),
+        BackgroundColor3 = Color3.fromRGB(255, 140, 50),
+        BackgroundTransparency = 0.75,
+        Size = UDim2.new(0, 110, 0, 22),
+        Position = UDim2.new(0, 88, 0, 42),
         Parent = LeadDevFrame
     })
-    Create("UICorner", {CornerRadius = UDim.new(0, 5), Parent = LeadRoleBadge})
+    Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = LeadRoleBadge})
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = "Lead Developer",
-        TextColor3 = Color3.fromRGB(255, 215, 0),
-        TextSize = 10,
+        TextColor3 = Color3.fromRGB(255, 160, 80),
+        TextSize = 11,
         Parent = LeadRoleBadge
     })
     
+    -- Discord info
     Create("TextLabel", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, -90, 0, 16),
-        Position = UDim2.new(0, 78, 0, 62),
+        Size = UDim2.new(1, -100, 0, 18),
+        Position = UDim2.new(0, 88, 0, 70),
         Font = Enum.Font.Gotham,
         Text = "Discord: tsunamioffical",
         TextColor3 = Theme.TextMuted,
-        TextSize = 11,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = LeadDevFrame
     })
     
-    -- Assistant Developer Card
+    -- ═══════════════════════════════════════════════════════════════
+    -- CO-DEVELOPER CARD - Green Theme
+    -- ═══════════════════════════════════════════════════════════════
     local AssistantDevFrame = Create("Frame", {
         BackgroundColor3 = Theme.Card,
-        Size = UDim2.new(1, 0, 0, 100),
+        Size = UDim2.new(1, 0, 0, 110),
         LayoutOrder = 7,
         ClipsDescendants = true,
         Parent = PanelState.InfoTabContent
     })
-    Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = AssistantDevFrame})
-    Create("UIStroke", {Color = Theme.Success, Thickness = 1, Transparency = 0.5, Parent = AssistantDevFrame})
+    Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = AssistantDevFrame})
+    Create("UIStroke", {Color = Theme.Success, Thickness = 2, Transparency = 0.3, Parent = AssistantDevFrame})
     
-    -- Assistant badge
+    -- Number badge (green)
     local AssistantDevBadge = Create("Frame", {
         BackgroundColor3 = Theme.Success,
-        Size = UDim2.new(0, 50, 0, 50),
-        Position = UDim2.new(0, 16, 0.5, -25),
+        Size = UDim2.new(0, 56, 0, 56),
+        Position = UDim2.new(0, 18, 0.5, -28),
         Parent = AssistantDevFrame
     })
     Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = AssistantDevBadge})
-    AddGlow(AssistantDevBadge, Theme.Success, 15)
+    Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 220, 110)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(34, 197, 94)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 220, 110))
+        }),
+        Rotation = 45,
+        Parent = AssistantDevBadge
+    })
+    AddGlow(AssistantDevBadge, Theme.Success, 20)
     
+    -- Number "2"
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBlack,
         Text = "2",
         TextColor3 = Color3.fromRGB(255, 255, 255),
-        TextSize = 22,
+        TextSize = 26,
         Parent = AssistantDevBadge
     })
     
+    -- Developer name
     Create("TextLabel", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(0, 200, 0, 20),
-        Position = UDim2.new(0, 78, 0, 12),
+        Size = UDim2.new(0, 250, 0, 24),
+        Position = UDim2.new(0, 88, 0, 14),
         Font = Enum.Font.GothamBlack,
         Text = "zenjiux",
         TextColor3 = Theme.Text,
-        TextSize = 16,
+        TextSize = 18,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = AssistantDevFrame
     })
     
+    -- Role badge (green)
     local AssistantRoleBadge = Create("Frame", {
         BackgroundColor3 = Theme.Success,
-        BackgroundTransparency = 0.8,
-        Size = UDim2.new(0, 80, 0, 20),
-        Position = UDim2.new(0, 78, 0, 34),
+        BackgroundTransparency = 0.75,
+        Size = UDim2.new(0, 100, 0, 22),
+        Position = UDim2.new(0, 88, 0, 40),
         Parent = AssistantDevFrame
     })
-    Create("UICorner", {CornerRadius = UDim.new(0, 5), Parent = AssistantRoleBadge})
+    Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = AssistantRoleBadge})
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = "Co-Developer",
         TextColor3 = Theme.Success,
-        TextSize = 10,
+        TextSize = 11,
         Parent = AssistantRoleBadge
     })
     
+    -- Discord info
     Create("TextLabel", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, -90, 0, 16),
-        Position = UDim2.new(0, 78, 0, 60),
+        Size = UDim2.new(1, -100, 0, 18),
+        Position = UDim2.new(0, 88, 0, 68),
         Font = Enum.Font.Gotham,
         Text = "Discord: zenjiux",
         TextColor3 = Theme.TextMuted,
-        TextSize = 11,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = AssistantDevFrame
     })
     
+    -- Telegram info
     Create("TextLabel", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, -90, 0, 16),
-        Position = UDim2.new(0, 78, 0, 78),
+        Size = UDim2.new(1, -100, 0, 18),
+        Position = UDim2.new(0, 88, 0, 86),
         Font = Enum.Font.Gotham,
         Text = "Telegram: zenijux",
         TextColor3 = Theme.TextMuted,
-        TextSize = 11,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = AssistantDevFrame
     })
