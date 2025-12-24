@@ -4,17 +4,9 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 
--- Full cleanup of previous instances
 for _, gui in pairs(CoreGui:GetChildren()) do
     if gui.Name:find("MagicTulevo") then
         gui:Destroy()
-    end
-end
-
--- Stop any existing sounds
-for _, sound in pairs(SoundService:GetChildren()) do
-    if sound:IsA("Sound") then
-        pcall(function() sound:Stop() sound:Destroy() end)
     end
 end
 
@@ -22,13 +14,16 @@ local MagicTulevo = {}
 MagicTulevo.ToggleKey = Enum.KeyCode.K
 MagicTulevo.OnThemeChangeCallbacks = {}
 
--- Animation Settings (user configurable)
+-- ═══════════════════════════════════════════════════════════════
+-- ANIMATION SETTINGS (User configurable)
+-- ═══════════════════════════════════════════════════════════════
 MagicTulevo.AnimationSettings = {
-    EnableAnimations = true,
-    EnableGradients = true,
-    EnableGlow = true,
-    EnableSounds = true,
-    AnimationSpeed = 1.0, -- Multiplier for animation speed
+    EnableAnimations = true,      -- Master toggle for all animations
+    EnableGradients = true,       -- Animated gradients
+    EnableHoverEffects = true,    -- Hover animations on buttons
+    EnableSounds = true,          -- UI sounds
+    EnableParticles = true,       -- Particle effects (typing, etc.)
+    AnimationSpeed = 1.0,         -- Animation speed multiplier (0.5 = slow, 2.0 = fast)
 }
 
 -- ═══════════════════════════════════════════════════════════════
@@ -85,13 +80,17 @@ end
 local MainAnimationConnection = nil
 local function StartAnimationLoop()
     if AnimationQueue.Active then return end
+    if not MagicTulevo.AnimationSettings.EnableAnimations then return end
+    if not MagicTulevo.AnimationSettings.EnableGradients then return end
     AnimationQueue.Active = true
     
     MainAnimationConnection = RunService.RenderStepped:Connect(function(dt)
+        local speedMult = MagicTulevo.AnimationSettings.AnimationSpeed or 1.0
+        
         -- Update all gradient offsets
         for gradient, data in pairs(AnimationQueue.GradientOffsets) do
             if gradient and gradient.Parent then
-                data.offset = (data.offset + dt * data.speed) % 1
+                data.offset = (data.offset + dt * data.speed * speedMult) % 1
                 gradient.Offset = Vector2.new(data.offset, 0)
             else
                 AnimationQueue.GradientOffsets[gradient] = nil
@@ -101,7 +100,7 @@ local function StartAnimationLoop()
         -- Update all rotations
         for object, data in pairs(AnimationQueue.Rotations) do
             if object and object.Parent then
-                data.rotation = (data.rotation + dt * data.speed) % 360
+                data.rotation = (data.rotation + dt * data.speed * speedMult) % 360
                 object.Rotation = data.rotation
             else
                 AnimationQueue.Rotations[object] = nil
@@ -212,7 +211,7 @@ local lastSoundTime = 0
 local soundCooldown = 0.1 -- Minimum time between sounds
 
 local function PlaySound(id, vol)
-    if not MagicTulevo.AnimationSettings.EnableSounds then return end
+    if not MagicTulevo.AnimationSettings.EnableSounds then return end -- Check setting
     local now = tick()
     if now - lastSoundTime < soundCooldown then return end -- Rate limit
     lastSoundTime = now
@@ -237,17 +236,6 @@ end
 
 -- OPTIMIZED: Tween function using cached TweenInfo
 local function Tween(obj, t, props, style, dir)
-    if not MagicTulevo.AnimationSettings.EnableAnimations then
-        -- Apply properties instantly without animation
-        for k, v in pairs(props) do
-            pcall(function() obj[k] = v end)
-        end
-        return nil
-    end
-    
-    -- Apply animation speed multiplier
-    t = t / MagicTulevo.AnimationSettings.AnimationSpeed
-    
     local tweenInfo
     -- Use cached TweenInfo when possible
     if not style and not dir then
@@ -269,7 +257,6 @@ local function Tween(obj, t, props, style, dir)
 end
 
 local function AddGlow(parent, color, size)
-    if not MagicTulevo.AnimationSettings.EnableGlow then return nil end
     local glow = Create("ImageLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0.5, 0, 0.5, 0),
@@ -448,13 +435,6 @@ MagicTulevo.Connections = {}
 MagicTulevo.Sounds = {}
 MagicTulevo.Windows = {}
 MagicTulevo.SavedSettings = LoadSettings() or {}
-
--- Load saved animation settings
-if MagicTulevo.SavedSettings.AnimationSettings then
-    for key, value in pairs(MagicTulevo.SavedSettings.AnimationSettings) do
-        MagicTulevo.AnimationSettings[key] = value
-    end
-end
 
 function MagicTulevo:OnThemeChange(callback)
     if type(callback) == "function" then
@@ -725,7 +705,7 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 0,
         Parent = LogoContainer
     })
-    -- Logo is now static (no rotation animation)
+    -- OPTIMIZED: Removed logo rotation animation - static gradient for better startup performance
     local LogoLabel = Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
@@ -769,8 +749,8 @@ function MagicTulevo:CreateWindow(config)
 
     local HeaderButtons = Create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(0, 216, 0, 32),
-        Position = UDim2.new(1, -230, 0.5, -16),
+        Size = UDim2.new(0, 178, 0, 32),
+        Position = UDim2.new(1, -192, 0.5, -16),
         Parent = Header
     })
     Create("UIListLayout", {
@@ -798,6 +778,10 @@ function MagicTulevo:CreateWindow(config)
         InfoBtn = nil,
         InfoIcon = nil,
         InfoTooltip = nil,
+        MinimizeBtnContainer = nil,
+        MinimizeBtn = nil,
+        MinimizeIcon = nil,
+        MinimizeTooltip = nil,
         CloseBtn = nil,
         SearchPanel = nil,
         SearchPanelStroke = nil,
@@ -930,30 +914,27 @@ function MagicTulevo:CreateWindow(config)
         Parent = UI.ConfigsTooltip
     })
     
-    -- OPTIMIZED: Configs Button Hover - with rotation animation
-    local configsRotating = false
-    local configsRotationConn = nil
-    
+    -- Configs Button Hover - Full animation with rotation
     UI.ConfigsBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.ConfigsTooltip, 0.3, {Size = UDim2.new(0, 65, 0, 26)}, Enum.EasingStyle.Back)
-        -- Wiggle animation
+        -- Continuous rotation animation
         if MagicTulevo.AnimationSettings.EnableAnimations then
-            Tween(UI.ConfigsIcon, 0.15, {Rotation = 15}, Enum.EasingStyle.Quad)
-            task.delay(0.15, function()
-                if UI.ConfigsIcon and UI.ConfigsIcon.Parent then
-                    Tween(UI.ConfigsIcon, 0.15, {Rotation = -15}, Enum.EasingStyle.Quad)
-                end
-            end)
-            task.delay(0.3, function()
-                if UI.ConfigsIcon and UI.ConfigsIcon.Parent then
-                    Tween(UI.ConfigsIcon, 0.15, {Rotation = 10}, Enum.EasingStyle.Quad)
+            UI.configsIconRotating = true
+            task.spawn(function()
+                local rotation = 0
+                while UI.configsIconRotating do
+                    rotation = (rotation + 2) % 360
+                    UI.ConfigsIcon.Rotation = math.sin(math.rad(rotation)) * 15
+                    task.wait(0.016)
                 end
             end)
         end
     end)
     UI.ConfigsBtn.MouseLeave:Connect(function()
+        UI.configsIconRotating = false
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
         Tween(UI.ConfigsTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
@@ -1068,66 +1049,76 @@ function MagicTulevo:CreateWindow(config)
         Parent = UI.InfoTooltip
     })
     
-    -- Info Button Hover - with shake animation
+    -- Info Button Hover - Full shake animation
     UI.InfoBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.Accent})
         Tween(UI.InfoTooltip, 0.3, {Size = UDim2.new(0, 50, 0, 26)}, Enum.EasingStyle.Back)
         -- Shake animation
         if MagicTulevo.AnimationSettings.EnableAnimations then
-            local originalPos = UI.InfoIcon.Position
-            for i = 1, 3 do
-                task.delay((i-1) * 0.08, function()
-                    if UI.InfoIcon and UI.InfoIcon.Parent then
-                        local offset = (i % 2 == 0) and 2 or -2
-                        Tween(UI.InfoIcon, 0.04, {Position = UDim2.new(0, offset, 0, 0)})
-                    end
-                end)
-            end
-            task.delay(0.24, function()
-                if UI.InfoIcon and UI.InfoIcon.Parent then
-                    Tween(UI.InfoIcon, 0.1, {Position = UDim2.new(0, 0, 0, 0)})
+            UI.infoShaking = true
+            task.spawn(function()
+                local shakeAmount = 0
+                while UI.infoShaking do
+                    shakeAmount = shakeAmount + 0.3
+                    local offset = math.sin(shakeAmount) * 3
+                    UI.InfoIcon.Position = UDim2.new(0.5, offset, 0.5, 0)
+                    task.wait(0.016)
                 end
             end)
         end
     end)
     UI.InfoBtn.MouseLeave:Connect(function()
+        UI.infoShaking = false
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
         Tween(UI.InfoTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
+        UI.InfoIcon.Position = UDim2.new(0, 0, 0, 0)
     end)
 
-    -- Minimize Button Container
-    local MinimizeBtnContainer = Create("Frame", {
+    -- Minimize Button Container (between Info and Close)
+    UI.MinimizeBtnContainer = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(0, 32, 0, 32),
         ClipsDescendants = false,
         Parent = HeaderButtons
     })
-    local MinimizeBtn = Create("TextButton", {
+    UI.MinimizeBtn = Create("TextButton", {
         BackgroundColor3 = Theme.Card,
         Size = UDim2.new(0, 32, 0, 32),
         Font = Enum.Font.GothamBold,
-        Text = "−",
+        Text = "",
         TextColor3 = Theme.TextMuted,
-        TextSize = 20,
+        TextSize = 16,
         AutoButtonColor = false,
-        Parent = MinimizeBtnContainer
+        Parent = UI.MinimizeBtnContainer
     })
-    Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = MinimizeBtn})
-    Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = MinimizeBtn})
+    Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = UI.MinimizeBtn})
+    Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = UI.MinimizeBtn})
+    
+    -- Minimize Icon (dash/minus)
+    UI.MinimizeIcon = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = "—",
+        TextColor3 = Theme.TextMuted,
+        TextSize = 18,
+        Parent = UI.MinimizeBtn
+    })
     
     -- Minimize Tooltip
-    local MinimizeTooltip = Create("Frame", {
+    UI.MinimizeTooltip = Create("Frame", {
         BackgroundColor3 = Theme.Secondary,
         Size = UDim2.new(0, 0, 0, 26),
         Position = UDim2.new(0, -6, 0.5, 0),
         AnchorPoint = Vector2.new(1, 0.5),
         ClipsDescendants = true,
-        Parent = MinimizeBtnContainer
+        Parent = UI.MinimizeBtnContainer
     })
-    Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = MinimizeTooltip})
-    Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.5, Parent = MinimizeTooltip})
+    Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = UI.MinimizeTooltip})
+    Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.5, Parent = UI.MinimizeTooltip})
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -10, 1, 0),
@@ -1137,72 +1128,54 @@ function MagicTulevo:CreateWindow(config)
         TextColor3 = Theme.Text,
         TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Center,
-        Parent = MinimizeTooltip
+        Parent = UI.MinimizeTooltip
     })
     
-    MinimizeBtn.MouseEnter:Connect(function()
-        Tween(MinimizeBtn, 0.2, {BackgroundColor3 = Theme.Warning, TextColor3 = Theme.Text})
-        Tween(MinimizeTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
+    -- Minimize Button Hover
+    UI.MinimizeBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        Tween(UI.MinimizeBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
+        Tween(UI.MinimizeIcon, 0.2, {TextColor3 = Theme.Warning})
+        Tween(UI.MinimizeTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
     end)
-    MinimizeBtn.MouseLeave:Connect(function()
-        Tween(MinimizeBtn, 0.2, {BackgroundColor3 = Theme.Card, TextColor3 = Theme.TextMuted})
-        Tween(MinimizeTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
+    UI.MinimizeBtn.MouseLeave:Connect(function()
+        Tween(UI.MinimizeBtn, 0.2, {BackgroundColor3 = Theme.Card})
+        Tween(UI.MinimizeIcon, 0.2, {TextColor3 = Theme.TextMuted})
+        Tween(UI.MinimizeTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
     end)
     
-    -- Minimize state
-    local isMinimized = false
-    local minimizedSavedSize = nil
-    local savedContentVisible = true
-    
-    MinimizeBtn.MouseButton1Click:Connect(function()
-        isMinimized = not isMinimized
+    -- Minimize Button Click - Hide/Show window
+    UI.MinimizeBtn.MouseButton1Click:Connect(function()
         PlaySound("rbxassetid://6895079853", 0.3)
+        Window.Visible = false
         
-        if isMinimized then
-            -- Save current size and minimize
-            minimizedSavedSize = Main.Size
-            MinimizeBtn.Text = "+"
-            
-            -- Close search panel if open
-            if UI.SearchOpen then
-                UI.SearchOpen = false
-                UI.SearchPanel.Size = UDim2.new(1, -28, 0, 0)
-                UI.SearchPanel.BackgroundTransparency = 1
-                UI.SearchPanelStroke.Transparency = 1
-                if UI.SearchPanelGlow then UI.SearchPanelGlow.ImageTransparency = 1 end
-                UI.SearchInputContainer.BackgroundTransparency = 1
-                UI.SearchInputStroke.Transparency = 1
-                UI.SearchInputIcon.ImageTransparency = 1
-                UI.SearchCounter.TextTransparency = 1
+        -- Save settings before minimizing
+        local toggleStates = {}
+        for _, tog in pairs(Window.Toggles) do
+            if tog.Name then
+                toggleStates[tog.Name] = tog.Value
             end
-            
-            -- Hide content immediately to prevent visual bugs
-            if SidePanel then SidePanel.Visible = false end
-            if ContentPanel then ContentPanel.Visible = false end
-            if Divider then Divider.Visible = false end
-            
-            -- Animate to minimized size
-            Tween(Main, 0.3, {Size = UDim2.new(0, Main.Size.X.Offset, 0, 63)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        else
-            -- Restore
-            MinimizeBtn.Text = "−"
-            
-            -- Animate back to saved size
-            Tween(Main, 0.35, {Size = minimizedSavedSize or size}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-            
-            task.delay(0.25, function()
-                if SidePanel then SidePanel.Visible = true end
-                if ContentPanel then ContentPanel.Visible = true end
-                if Divider then Divider.Visible = true end
-                
-                -- Restore the current tab or first tab
-                if Window.CurrentTab then
-                    Window.CurrentTab.Content.Visible = true
-                elseif #Window.Tabs > 0 then
-                    Window.Tabs[1]:Select()
-                end
-            end)
         end
+        
+        local settingsToSave = {
+            ThemeIndex = CurrentThemeIndex,
+            ToggleKey = toggleKey.Name,
+            WindowPosition = {Main.Position.X.Offset, Main.Position.Y.Offset},
+            WindowSize = {Main.Size.X.Offset, Main.Size.Y.Offset},
+            Toggles = toggleStates
+        }
+        SaveSettings(settingsToSave)
+        
+        -- Animate minimize
+        local currentSize = Main.Size
+        Tween(Main, 0.3, {
+            Size = UDim2.new(0, currentSize.X.Offset * 0.9, 0, currentSize.Y.Offset * 0.9),
+            BackgroundTransparency = 1
+        }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        
+        task.delay(0.3, function()
+            if not Window.Visible then ScreenGui.Enabled = false end
+        end)
     end)
 
     UI.CloseBtn = Create("TextButton", {
@@ -1218,18 +1191,32 @@ function MagicTulevo:CreateWindow(config)
     Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = UI.CloseBtn})
     Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = UI.CloseBtn})
     
-    -- OPTIMIZED: Search Button Hover - with flip animation
+    -- Search Button Hover - Full animation with rotation
     UI.SearchBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SearchTooltip, 0.3, {Size = UDim2.new(0, 60, 0, 26)}, Enum.EasingStyle.Back)
-        -- Flip animation for search icon
+        -- Full rotation animation (backflip)
         if MagicTulevo.AnimationSettings.EnableAnimations then
-            Tween(UI.SearchIcon, 0.3, {Rotation = 360}, Enum.EasingStyle.Back)
-            Tween(UI.SearchIcon, 0.2, {Size = UDim2.new(0, 20, 0, 20)}, Enum.EasingStyle.Back)
+            UI.searchAnimating = true
+            task.spawn(function()
+                while UI.searchAnimating do
+                    Tween(UI.SearchIcon, 0.3, {Rotation = 360, Size = UDim2.new(0, 18, 0, 18)}, Enum.EasingStyle.Quint)
+                    task.wait(0.35)
+                    if not UI.searchAnimating then break end
+                    UI.SearchIcon.Rotation = 0
+                    Tween(UI.SearchIcon, 0.2, {Position = UDim2.new(0.5, 0, 0.5, -4)}, Enum.EasingStyle.Back)
+                    task.wait(0.25)
+                    if not UI.searchAnimating then break end
+                    Tween(UI.SearchIcon, 0.2, {Position = UDim2.new(0.5, 0, 0.5, 0)}, Enum.EasingStyle.Quint)
+                    task.wait(0.3)
+                end
+            end)
         end
     end)
     UI.SearchBtn.MouseLeave:Connect(function()
+        UI.searchAnimating = false
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.SearchIcon, 0.2, {
             ImageColor3 = Theme.TextMuted,
@@ -1240,36 +1227,29 @@ function MagicTulevo:CreateWindow(config)
         Tween(UI.SearchTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
     end)
     
-    -- Settings Button Hover - with continuous gear rotation
-    local gearRotating = false
-    local gearRotationConn = nil
-    
+    -- Settings Button Hover - Full rotation animation
     UI.SettingsBtn.MouseEnter:Connect(function()
+        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SettingsTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
-        
-        -- Continuous gear rotation while hovering
-        if MagicTulevo.AnimationSettings.EnableAnimations and not gearRotating then
-            gearRotating = true
-            gearRotationConn = RunService.RenderStepped:Connect(function(dt)
-                if UI.GearIcon and UI.GearIcon.Parent then
-                    UI.GearIcon.Rotation = UI.GearIcon.Rotation + dt * 90
+        -- Continuous rotation animation
+        if MagicTulevo.AnimationSettings.EnableAnimations then
+            UI.gearRotating = true
+            task.spawn(function()
+                while UI.gearRotating do
+                    UI.gearRotation = (UI.gearRotation + 3) % 360
+                    UI.GearIcon.Rotation = UI.gearRotation
+                    task.wait(0.016)
                 end
             end)
         end
     end)
     UI.SettingsBtn.MouseLeave:Connect(function()
+        UI.gearRotating = false
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
         Tween(UI.SettingsTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
-        
-        -- Stop gear rotation
-        gearRotating = false
-        if gearRotationConn then
-            gearRotationConn:Disconnect()
-            gearRotationConn = nil
-        end
         Tween(UI.GearIcon, 0.3, {Rotation = 0})
     end)
     
@@ -1282,23 +1262,6 @@ function MagicTulevo:CreateWindow(config)
     UI.CloseBtn.MouseButton1Click:Connect(function()
         -- Full unhook - completely destroy menu and all sounds
         PlaySound("rbxassetid://6895079853", 0.4) -- Close sound
-        
-        -- Save settings before closing
-        local toggleStates = {}
-        for _, tog in pairs(Window.Toggles) do
-            if tog.Name then
-                toggleStates[tog.Name] = tog.Value
-            end
-        end
-        
-        MagicTulevo.SavedSettings = MagicTulevo.SavedSettings or {}
-        MagicTulevo.SavedSettings.ThemeIndex = CurrentThemeIndex
-        MagicTulevo.SavedSettings.ToggleKey = toggleKey.Name
-        MagicTulevo.SavedSettings.WindowPosition = {Main.Position.X.Offset, Main.Position.Y.Offset}
-        MagicTulevo.SavedSettings.WindowSize = {Main.Size.X.Offset, Main.Size.Y.Offset}
-        MagicTulevo.SavedSettings.Toggles = toggleStates
-        MagicTulevo.SavedSettings.AnimationSettings = MagicTulevo.AnimationSettings
-        SaveSettings(MagicTulevo.SavedSettings)
         
         -- Animate close
         Tween(Main, 0.4, {
@@ -1314,31 +1277,25 @@ function MagicTulevo:CreateWindow(config)
             -- Stop all sounds
             for _, sound in pairs(SoundService:GetChildren()) do
                 if sound:IsA("Sound") then
-                    pcall(function()
-                        sound:Stop()
-                        sound:Destroy()
-                    end)
+                    sound:Stop()
+                    sound:Destroy()
                 end
             end
             
             -- Disconnect all connections
             for _, conn in pairs(MagicTulevo.Connections) do
-                pcall(function()
-                    if conn and conn.Connected then
-                        conn:Disconnect()
-                    end
-                end)
+                if conn and conn.Connected then
+                    conn:Disconnect()
+                end
             end
             MagicTulevo.Connections = {}
             
             -- Clear object pools
             for poolName, pool in pairs(ObjectPool) do
                 for _, obj in pairs(pool) do
-                    pcall(function()
-                        if obj and obj.Parent then
-                            obj:Destroy()
-                        end
-                    end)
+                    if obj and obj.Parent then
+                        obj:Destroy()
+                    end
                 end
                 ObjectPool[poolName] = {}
             end
@@ -1346,31 +1303,24 @@ function MagicTulevo:CreateWindow(config)
             -- Clear TweenInfo cache
             CustomTweenCache = {}
             
-            -- Clear animation queue
-            AnimationQueue.GradientOffsets = {}
-            AnimationQueue.Rotations = {}
-            AnimationQueue.Active = false
-            
             -- Clear theme callbacks
             MagicTulevo.OnThemeChangeCallbacks = {}
             
             -- Destroy all MagicTulevo GUIs (including notifications)
             for _, gui in pairs(CoreGui:GetChildren()) do
                 if gui.Name:find("MagicTulevo") then
-                    pcall(function() gui:Destroy() end)
+                    gui:Destroy()
                 end
             end
             
             -- Clear windows table
             MagicTulevo.Windows = {}
             
-            -- Reset module state for clean restart
-            MagicTulevo.Connections = {}
-            MagicTulevo.Sounds = {}
+            -- Clear saved settings reference
+            MagicTulevo.SavedSettings = {}
             
             -- Notify user
             print("[MagicTulevo] Menu fully unhooked and destroyed - all resources cleaned up")
-            print("[MagicTulevo] You can safely re-execute the script")
         end)
     end)
     
@@ -1657,20 +1607,7 @@ function MagicTulevo:CreateWindow(config)
                     Parent = DotsContainer
                 })
                 
-                -- Use gradient colors for gradient themes, otherwise use accent colors
-                local paletteColors
-                if themeData.IsGradient and themeData.GradientColors and #themeData.GradientColors >= 2 then
-                    paletteColors = {}
-                    for j = 1, math.min(3, #themeData.GradientColors) do
-                        table.insert(paletteColors, themeData.GradientColors[j])
-                    end
-                    if #paletteColors < 3 then
-                        table.insert(paletteColors, themeData.Colors.AccentGlow)
-                    end
-                else
-                    paletteColors = {themeData.Colors.Accent, themeData.Colors.AccentDark, themeData.Colors.AccentGlow}
-                end
-                
+                local paletteColors = {themeData.Colors.Accent, themeData.Colors.AccentDark, themeData.Colors.AccentGlow}
                 for _, color in ipairs(paletteColors) do
                     local Dot = Create("Frame", {
                         BackgroundColor3 = color,
@@ -2179,9 +2116,6 @@ function MagicTulevo:CreateWindow(config)
         Tween(UI.SearchInputStroke, 0.2, {Transparency = 1})
         Tween(UI.SearchInputIcon, 0.2, {ImageTransparency = 1})
         Tween(UI.SearchCounter, 0.2, {TextTransparency = 1})
-        -- Reset button state
-        Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.Card})
-        Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.TextMuted})
     end
     
     -- Clear button functionality
@@ -2301,58 +2235,31 @@ function MagicTulevo:CreateWindow(config)
     UI.SearchBtn.MouseButton1Click:Connect(function()
         UI.SearchOpen = not UI.SearchOpen
         if UI.SearchOpen then
-            -- Beautiful open animation with staggered effects
+            -- Beautiful open animation
             UI.SearchPanel.BackgroundTransparency = 1
-            UI.SearchPanel.Size = UDim2.new(1, -28, 0, 0)
-            
-            -- Main panel expansion
             Tween(UI.SearchPanel, 0.5, {Size = UDim2.new(1, -28, 0, 340), BackgroundTransparency = 0}, Enum.EasingStyle.Back)
             
             -- Staggered element animations
             task.delay(0.1, function()
                 Tween(UI.SearchPanelStroke, 0.3, {Transparency = 0.3})
-                if UI.SearchPanelGlow then 
-                    Tween(UI.SearchPanelGlow, 0.4, {ImageTransparency = 0.85}) 
-                end
+                if UI.SearchPanelGlow then Tween(UI.SearchPanelGlow, 0.4, {ImageTransparency = 0.85}) end
             end)
             task.delay(0.15, function()
-                UI.SearchInputContainer.BackgroundTransparency = 1
-                UI.SearchInputContainer.Position = UDim2.new(0, 10, 0, -20)
-                Tween(UI.SearchInputContainer, 0.35, {BackgroundTransparency = 0, Position = UDim2.new(0, 10, 0, 12)}, Enum.EasingStyle.Back)
+                Tween(UI.SearchInputContainer, 0.35, {BackgroundTransparency = 0}, Enum.EasingStyle.Back)
                 Tween(UI.SearchInputStroke, 0.3, {Transparency = 0.3})
             end)
             task.delay(0.2, function()
-                UI.SearchInputIcon.ImageTransparency = 1
-                UI.SearchInputIcon.Rotation = -180
-                Tween(UI.SearchInputIcon, 0.4, {ImageTransparency = 0, Rotation = 0}, Enum.EasingStyle.Back)
+                Tween(UI.SearchInputIcon, 0.4, {ImageTransparency = 0, Rotation = 360}, Enum.EasingStyle.Back)
+                task.delay(0.4, function() UI.SearchInputIcon.Rotation = 0 end)
             end)
             task.delay(0.25, function()
-                UI.SearchCounter.TextTransparency = 1
                 Tween(UI.SearchCounter, 0.3, {TextTransparency = 0})
             end)
             task.delay(0.3, function()
-                UI.SearchResults.CanvasPosition = Vector2.new(0, 0)
-            end)
-            task.delay(0.35, function()
                 UI.SearchInput:CaptureFocus()
             end)
-            
-            -- Button glow effect
-            Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.Accent})
-            Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.Text})
         else
-            -- Close animation
-            Tween(UI.SearchPanel, 0.3, {Size = UDim2.new(1, -28, 0, 0), BackgroundTransparency = 1}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-            Tween(UI.SearchPanelStroke, 0.2, {Transparency = 1})
-            if UI.SearchPanelGlow then Tween(UI.SearchPanelGlow, 0.2, {ImageTransparency = 1}) end
-            Tween(UI.SearchInputContainer, 0.2, {BackgroundTransparency = 1})
-            Tween(UI.SearchInputStroke, 0.2, {Transparency = 1})
-            Tween(UI.SearchInputIcon, 0.2, {ImageTransparency = 1})
-            Tween(UI.SearchCounter, 0.2, {TextTransparency = 1})
-            
-            -- Reset button
-            Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.Card})
-            Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.TextMuted})
+            CloseSearch()
         end
     end)
 
@@ -2749,42 +2656,16 @@ function MagicTulevo:CreateWindow(config)
     
     local SidePanel, ContentPanel, Divider
     
-    -- Panel state (consolidated to reduce local variables)
-    local PanelState = {
-        SettingsOpen = false,
-        InfoOpen = false,
-        ConfigsOpen = false,
-        AccountOpen = false,
-        SettingsTabContent = nil,
-        InfoTabContent = nil,
-        ConfigsTabContent = nil,
-        AccountTabContent = nil,
-        AccountPanel = nil
-    }
-    
     ApplyTheme = function(themeData)
-        -- Update all theme colors
         for key, value in pairs(themeData.Colors) do
             Theme[key] = value
         end
         
-        -- Main window
+        -- Main window colors
         Main.BackgroundColor3 = Theme.Background
         MainStroke.Color = Theme.Border
-        
-        -- Panels
-        if SidePanel then 
-            SidePanel.BackgroundColor3 = Theme.Secondary 
-            local sidePanelStroke = SidePanel:FindFirstChildOfClass("UIStroke")
-            if sidePanelStroke then sidePanelStroke.Color = Theme.Border end
-        end
-        if ContentPanel then 
-            ContentPanel.BackgroundColor3 = Theme.Secondary 
-            local contentPanelStroke = ContentPanel:FindFirstChildOfClass("UIStroke")
-            if contentPanelStroke then contentPanelStroke.Color = Theme.Border end
-        end
-        
-        -- Header elements
+        if SidePanel then SidePanel.BackgroundColor3 = Theme.Secondary end
+        if ContentPanel then ContentPanel.BackgroundColor3 = Theme.Secondary end
         TitleLabel.TextColor3 = Theme.Text
         SubTitleLabel.TextColor3 = Theme.TextMuted
         if Divider then Divider.BackgroundColor3 = Theme.Border end
@@ -2794,12 +2675,15 @@ function MagicTulevo:CreateWindow(config)
         UI.SettingsBtn.BackgroundColor3 = Theme.Card
         UI.ConfigsBtn.BackgroundColor3 = Theme.Card
         UI.InfoBtn.BackgroundColor3 = Theme.Card
+        if UI.MinimizeBtn then UI.MinimizeBtn.BackgroundColor3 = Theme.Card end
         UI.CloseBtn.BackgroundColor3 = Theme.Card
         
+        -- Icons
         UI.SearchIcon.ImageColor3 = Theme.TextMuted
         UI.GearIcon.ImageColor3 = Theme.TextMuted
         UI.ConfigsIcon.ImageColor3 = Theme.TextMuted
         UI.InfoIcon.TextColor3 = Theme.TextMuted
+        if UI.MinimizeIcon then UI.MinimizeIcon.TextColor3 = Theme.TextMuted end
         UI.CloseBtn.TextColor3 = Theme.TextMuted
         
         -- Tooltips
@@ -2807,6 +2691,7 @@ function MagicTulevo:CreateWindow(config)
         UI.SettingsTooltip.BackgroundColor3 = Theme.Secondary
         UI.ConfigsTooltip.BackgroundColor3 = Theme.Secondary
         UI.InfoTooltip.BackgroundColor3 = Theme.Secondary
+        if UI.MinimizeTooltip then UI.MinimizeTooltip.BackgroundColor3 = Theme.Secondary end
         
         -- Search panel
         UI.SearchPanel.BackgroundColor3 = Theme.Secondary
@@ -2816,24 +2701,12 @@ function MagicTulevo:CreateWindow(config)
         UI.SearchCounter.TextColor3 = Theme.TextMuted
         UI.SearchResults.ScrollBarImageColor3 = Theme.Accent
         UI.SearchInputIcon.ImageColor3 = Theme.Accent
+        if UI.SearchPanelStroke then UI.SearchPanelStroke.Color = Theme.Accent end
+        if UI.SearchInputStroke then UI.SearchInputStroke.Color = Theme.Accent end
         
-        -- Update button strokes
-        for _, btn in ipairs({UI.SearchBtn, UI.SettingsBtn, UI.ConfigsBtn, UI.InfoBtn, UI.CloseBtn}) do
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then stroke.Color = Theme.Border end
-        end
-        
-        -- Update tooltip strokes
-        for _, tooltip in ipairs({UI.SearchTooltip, UI.SettingsTooltip, UI.ConfigsTooltip, UI.InfoTooltip}) do
-            local stroke = tooltip:FindFirstChildOfClass("UIStroke")
-            if stroke then stroke.Color = Theme.Accent end
-        end
-        
-        -- Account panel
-        if PanelState.AccountPanel then
-            PanelState.AccountPanel.BackgroundColor3 = Theme.Card
-            local accountStroke = PanelState.AccountPanel:FindFirstChildOfClass("UIStroke")
-            if accountStroke then accountStroke.Color = Theme.Accent end
+        -- Update FOV circle color if exists
+        if FOVCircle then
+            FOVCircle.Color = Theme.Accent
         end
         
         -- Update all UI elements (buttons, toggles, sliders, etc.) backgrounds
@@ -2849,22 +2722,11 @@ function MagicTulevo:CreateWindow(config)
                     -- Update text colors
                     for _, child in pairs(uiElem:GetDescendants()) do
                         if child:IsA("TextLabel") then
-                            if child.Name ~= "HealthText" and child.TextColor3 ~= Theme.TextDark then
-                                if child.TextColor3 == Theme.Accent or child.TextColor3 == Theme.AccentDark or child.TextColor3 == Theme.AccentGlow then
-                                    Tween(child, 0.3, {TextColor3 = Theme.Accent})
-                                else
-                                    Tween(child, 0.3, {TextColor3 = Theme.Text})
-                                end
+                            if child.TextColor3 ~= Theme.TextDark and child.TextColor3 ~= Theme.Accent then
+                                Tween(child, 0.3, {TextColor3 = Theme.Text})
                             end
                         elseif child:IsA("TextBox") then
                             Tween(child, 0.3, {TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, BackgroundColor3 = Theme.Background})
-                        elseif child:IsA("Frame") and child.Name == "ToggleBg" then
-                            -- Toggle backgrounds handled separately
-                        elseif child:IsA("Frame") then
-                            local childStroke = child:FindFirstChildOfClass("UIStroke")
-                            if childStroke then
-                                Tween(childStroke, 0.3, {Color = Theme.Border})
-                            end
                         end
                     end
                 end
@@ -2877,8 +2739,6 @@ function MagicTulevo:CreateWindow(config)
                 local isSelected = Window.CurrentTab == tab
                 if isSelected then
                     Tween(tab.Button, 0.3, {BackgroundColor3 = Theme.Card})
-                else
-                    tab.Button.BackgroundColor3 = Theme.Card
                 end
                 Tween(tab.Label, 0.3, {TextColor3 = isSelected and Theme.Text or Theme.TextMuted})
                 Tween(tab.Indicator, 0.3, {BackgroundColor3 = Theme.Accent})
@@ -2892,86 +2752,44 @@ function MagicTulevo:CreateWindow(config)
             end
         end
         
-        -- Update Settings tab content colors
+        -- Update Settings/Info/Configs tab content colors
         if PanelState.SettingsTabContent then
-            for _, child in pairs(PanelState.SettingsTabContent:GetDescendants()) do
-                if child:IsA("Frame") and child.BackgroundTransparency < 1 then
-                    if child.BackgroundColor3 ~= Theme.Accent and child.BackgroundColor3 ~= Theme.Success and child.BackgroundColor3 ~= Theme.Error and child.BackgroundColor3 ~= Theme.Warning then
-                        child.BackgroundColor3 = Theme.Card
-                    end
-                elseif child:IsA("TextLabel") then
-                    if child.TextColor3 ~= Theme.Accent and child.TextColor3 ~= Theme.Success then
-                        child.TextColor3 = Theme.Text
-                    end
-                elseif child:IsA("TextButton") then
-                    if child.BackgroundColor3 ~= Theme.Accent then
-                        child.BackgroundColor3 = Theme.Background
-                    end
-                end
-            end
+            PanelState.SettingsTabContent.ScrollBarImageColor3 = Theme.Accent
         end
-        
-        -- Update Info tab content colors
         if PanelState.InfoTabContent then
-            for _, child in pairs(PanelState.InfoTabContent:GetDescendants()) do
-                if child:IsA("Frame") and child.BackgroundTransparency < 1 then
-                    if child.BackgroundColor3 ~= Theme.Accent and child.BackgroundColor3 ~= Theme.Success and child.BackgroundColor3 ~= Theme.Error and child.BackgroundColor3 ~= Color3.fromRGB(88, 101, 242) and child.BackgroundColor3 ~= Color3.fromRGB(0, 136, 204) then
-                        child.BackgroundColor3 = Theme.Card
-                    end
-                elseif child:IsA("TextLabel") then
-                    if child.TextColor3 ~= Theme.Accent and child.TextColor3 ~= Theme.Success and child.TextColor3 ~= Color3.fromRGB(88, 101, 242) and child.TextColor3 ~= Color3.fromRGB(0, 136, 204) then
-                        if child.Name:find("Muted") or child.TextSize < 12 then
-                            child.TextColor3 = Theme.TextMuted
-                        else
-                            child.TextColor3 = Theme.Text
-                        end
-                    end
-                end
-            end
+            PanelState.InfoTabContent.ScrollBarImageColor3 = Theme.Accent
         end
-        
-        -- Update Account tab content colors
+        if PanelState.ConfigsTabContent then
+            -- Update configs tab colors
+        end
         if PanelState.AccountTabContent then
-            for _, child in pairs(PanelState.AccountTabContent:GetDescendants()) do
-                if child:IsA("Frame") and child.BackgroundTransparency < 1 then
-                    if child.BackgroundColor3 ~= Theme.Accent and child.BackgroundColor3 ~= Theme.Success then
-                        child.BackgroundColor3 = Theme.Card
-                    end
-                elseif child:IsA("TextLabel") then
-                    if child.TextColor3 ~= Theme.Accent and child.TextColor3 ~= Theme.Success then
-                        child.TextColor3 = Theme.Text
-                    end
-                end
-            end
+            PanelState.AccountTabContent.ScrollBarImageColor3 = Theme.Accent
         end
         
-        -- Update gradients based on theme
-        if MagicTulevo.AnimationSettings.EnableGradients then
-            if themeData.IsGradient and themeData.GradientColors then
-                local keypoints = {}
-                for i, color in ipairs(themeData.GradientColors) do
-                    table.insert(keypoints, ColorSequenceKeypoint.new((i-1)/(#themeData.GradientColors-1), color))
-                end
-                AccentGradient.Color = ColorSequence.new(keypoints)
-                LogoGradient.Color = ColorSequence.new(keypoints)
-            else
-                AccentGradient.Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0, Theme.Accent),
-                    ColorSequenceKeypoint.new(0.5, Theme.AccentGlow),
-                    ColorSequenceKeypoint.new(1, Theme.Accent)
-                })
-                LogoGradient.Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0, Theme.Accent),
-                    ColorSequenceKeypoint.new(0.5, Theme.AccentGlow),
-                    ColorSequenceKeypoint.new(1, Theme.Accent)
-                })
-            end
+        -- Update Account Panel
+        if PanelState.AccountPanel then
+            PanelState.AccountPanel.BackgroundColor3 = Theme.Card
         end
         
-        -- Save theme index
-        MagicTulevo.SavedSettings = MagicTulevo.SavedSettings or {}
-        MagicTulevo.SavedSettings.ThemeIndex = CurrentThemeIndex
-        SaveSettings(MagicTulevo.SavedSettings)
+        if themeData.IsGradient and themeData.GradientColors then
+            local keypoints = {}
+            for i, color in ipairs(themeData.GradientColors) do
+                table.insert(keypoints, ColorSequenceKeypoint.new((i-1)/(#themeData.GradientColors-1), color))
+            end
+            AccentGradient.Color = ColorSequence.new(keypoints)
+            LogoGradient.Color = ColorSequence.new(keypoints)
+        else
+            AccentGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(0.5, Theme.AccentGlow),
+                ColorSequenceKeypoint.new(1, Theme.Accent)
+            })
+            LogoGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Theme.Accent),
+                ColorSequenceKeypoint.new(0.5, Theme.AccentGlow),
+                ColorSequenceKeypoint.new(1, Theme.Accent)
+            })
+        end
         
         MagicTulevo:Notify({Title = "Theme Changed", Message = "Applied: " .. themeData.Name, Type = "Success", Duration = 2})
         
@@ -2981,20 +2799,28 @@ function MagicTulevo:CreateWindow(config)
         end
     end
 
+    -- Panel state (consolidated to reduce local variables)
+    local PanelState = {
+        SettingsOpen = false,
+        InfoOpen = false,
+        ConfigsOpen = false,
+        AccountOpen = false,
+        SettingsTabContent = nil,
+        InfoTabContent = nil,
+        ConfigsTabContent = nil,
+        AccountTabContent = nil,
+        AccountPanel = nil
+    }
+
     -- Configs Button Click Handler
     UI.ConfigsBtn.MouseButton1Click:Connect(function()
         PanelState.ConfigsOpen = not PanelState.ConfigsOpen
-        PlaySound("rbxassetid://6895079853", 0.3)
-        
         if PanelState.ConfigsOpen then
             -- Hide Info tab if open
             if PanelState.InfoOpen then
                 PanelState.InfoOpen = false
                 if PanelState.InfoTabContent then
-                    Tween(PanelState.InfoTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.InfoTabContent then PanelState.InfoTabContent.Visible = false end
-                    end)
+                    PanelState.InfoTabContent.Visible = false
                 end
                 Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
@@ -3003,10 +2829,7 @@ function MagicTulevo:CreateWindow(config)
             if PanelState.SettingsOpen then
                 PanelState.SettingsOpen = false
                 if PanelState.SettingsTabContent then
-                    Tween(PanelState.SettingsTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.SettingsTabContent then PanelState.SettingsTabContent.Visible = false end
-                    end)
+                    PanelState.SettingsTabContent.Visible = false
                 end
                 Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
@@ -3015,23 +2838,14 @@ function MagicTulevo:CreateWindow(config)
             if PanelState.AccountOpen then
                 PanelState.AccountOpen = false
                 if PanelState.AccountTabContent then
-                    Tween(PanelState.AccountTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.AccountTabContent then PanelState.AccountTabContent.Visible = false end
-                    end)
+                    PanelState.AccountTabContent.Visible = false
                 end
-                if PanelState.AccountPanel then
-                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
-                end
+                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
             end
             
-            -- Hide all user tabs with animation
             for _, t in pairs(Window.Tabs) do
                 if t.Content.Visible then
-                    Tween(t.Content, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        t.Content.Visible = false
-                    end)
+                    t.Content.Visible = false
                     Tween(t.Button, 0.25, {BackgroundTransparency = 1})
                     Tween(t.Label, 0.25, {TextColor3 = Theme.TextMuted})
                     Tween(t.Indicator, 0.25, {Size = UDim2.new(0, 3, 0, 0)})
@@ -3040,63 +2854,35 @@ function MagicTulevo:CreateWindow(config)
                 end
             end
             Window.CurrentTab = nil
-            
-            -- Show Configs tab with full animation
             if PanelState.ConfigsTabContent then
                 PanelState.ConfigsTabContent.Visible = true
-                PanelState.ConfigsTabContent.Position = UDim2.new(0.1, 0, 0, 0)
-                PanelState.ConfigsTabContent.BackgroundTransparency = 1
-                
-                Tween(PanelState.ConfigsTabContent, 0.4, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
-                
-                -- Animate children
-                for i, child in pairs(PanelState.ConfigsTabContent:GetChildren()) do
-                    if child:IsA("Frame") or child:IsA("TextLabel") then
-                        local originalPos = child.Position
-                        child.Position = UDim2.new(originalPos.X.Scale, originalPos.X.Offset, originalPos.Y.Scale + 0.05, originalPos.Y.Offset)
-                        task.delay(i * 0.03, function()
-                            Tween(child, 0.3, {Position = originalPos}, Enum.EasingStyle.Back)
-                        end)
-                    end
-                end
+                PanelState.ConfigsTabContent.Position = UDim2.new(0.05, 0, 0, 0)
+                Tween(PanelState.ConfigsTabContent, 0.35, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
             end
-            
-            -- Button active state
             Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Accent})
             Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.Text})
         else
-            -- Hide Configs tab with animation
+            -- Hide Configs tab and show first user tab
             if PanelState.ConfigsTabContent then
-                Tween(PanelState.ConfigsTabContent, 0.25, {Position = UDim2.new(0.05, 0, 0, 0)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-                task.delay(0.25, function()
-                    if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
-                end)
+                PanelState.ConfigsTabContent.Visible = false
             end
             Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
             Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted})
-            
             -- Select first tab if exists
-            task.delay(0.25, function()
-                if #Window.Tabs > 0 then
-                    Window.Tabs[1]:Select()
-                end
-            end)
+            if #Window.Tabs > 0 then
+                Window.Tabs[1]:Select()
+            end
         end
     end)
 
     UI.SettingsBtn.MouseButton1Click:Connect(function()
         PanelState.SettingsOpen = not PanelState.SettingsOpen
-        PlaySound("rbxassetid://6895079853", 0.3)
-        
         if PanelState.SettingsOpen then
             -- Hide Info tab if open
             if PanelState.InfoOpen then
                 PanelState.InfoOpen = false
                 if PanelState.InfoTabContent then
-                    Tween(PanelState.InfoTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.InfoTabContent then PanelState.InfoTabContent.Visible = false end
-                    end)
+                    PanelState.InfoTabContent.Visible = false
                 end
                 Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
@@ -3105,10 +2891,7 @@ function MagicTulevo:CreateWindow(config)
             if PanelState.ConfigsOpen then
                 PanelState.ConfigsOpen = false
                 if PanelState.ConfigsTabContent then
-                    Tween(PanelState.ConfigsTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
-                    end)
+                    PanelState.ConfigsTabContent.Visible = false
                 end
                 Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted})
@@ -3117,23 +2900,14 @@ function MagicTulevo:CreateWindow(config)
             if PanelState.AccountOpen then
                 PanelState.AccountOpen = false
                 if PanelState.AccountTabContent then
-                    Tween(PanelState.AccountTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.AccountTabContent then PanelState.AccountTabContent.Visible = false end
-                    end)
+                    PanelState.AccountTabContent.Visible = false
                 end
-                if PanelState.AccountPanel then
-                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
-                end
+                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
             end
             
-            -- Hide all user tabs with animation
             for _, t in pairs(Window.Tabs) do
                 if t.Content.Visible then
-                    Tween(t.Content, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        t.Content.Visible = false
-                    end)
+                    t.Content.Visible = false
                     Tween(t.Button, 0.25, {BackgroundTransparency = 1})
                     Tween(t.Label, 0.25, {TextColor3 = Theme.TextMuted})
                     Tween(t.Indicator, 0.25, {Size = UDim2.new(0, 3, 0, 0)})
@@ -3142,39 +2916,24 @@ function MagicTulevo:CreateWindow(config)
                 end
             end
             Window.CurrentTab = nil
-            
-            -- Show Settings tab with full animation
             if PanelState.SettingsTabContent then
                 PanelState.SettingsTabContent.Visible = true
-                PanelState.SettingsTabContent.Position = UDim2.new(0.1, 0, 0, 0)
-                PanelState.SettingsTabContent.CanvasPosition = Vector2.new(0, 0)
-                
-                Tween(PanelState.SettingsTabContent, 0.4, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
+                PanelState.SettingsTabContent.Position = UDim2.new(0.05, 0, 0, 0)
+                Tween(PanelState.SettingsTabContent, 0.35, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
             end
-            
-            -- Button active state with gear spin
             Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Accent})
             Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.Text})
-            if MagicTulevo.AnimationSettings.EnableAnimations then
-                Tween(UI.GearIcon, 0.4, {Rotation = 180}, Enum.EasingStyle.Back)
-            end
         else
-            -- Hide Settings tab with animation
+            -- Hide Settings tab and show first user tab
             if PanelState.SettingsTabContent then
-                Tween(PanelState.SettingsTabContent, 0.25, {Position = UDim2.new(0.05, 0, 0, 0)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-                task.delay(0.25, function()
-                    if PanelState.SettingsTabContent then PanelState.SettingsTabContent.Visible = false end
-                end)
+                PanelState.SettingsTabContent.Visible = false
             end
             Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
-            Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
-            
+            Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             -- Select first tab if exists
-            task.delay(0.25, function()
-                if #Window.Tabs > 0 then
-                    Window.Tabs[1]:Select()
-                end
-            end)
+            if #Window.Tabs > 0 then
+                Window.Tabs[1]:Select()
+            end
         end
     end)
 
@@ -3390,13 +3149,10 @@ function MagicTulevo:CreateWindow(config)
         PlaySound("rbxassetid://6895079853", 0.3)
         
         if PanelState.AccountOpen then
-            -- Hide other tabs with animation
+            -- Hide other tabs
             for _, t in pairs(Window.Tabs) do
                 if t.Content.Visible then
-                    Tween(t.Content, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        t.Content.Visible = false
-                    end)
+                    t.Content.Visible = false
                     Tween(t.Button, 0.25, {BackgroundTransparency = 1})
                     Tween(t.Label, 0.25, {TextColor3 = Theme.TextMuted})
                     Tween(t.Indicator, 0.25, {Size = UDim2.new(0, 3, 0, 0)})
@@ -3409,12 +3165,7 @@ function MagicTulevo:CreateWindow(config)
             -- Hide Settings if open
             if PanelState.SettingsOpen then
                 PanelState.SettingsOpen = false
-                if PanelState.SettingsTabContent then 
-                    Tween(PanelState.SettingsTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.SettingsTabContent then PanelState.SettingsTabContent.Visible = false end
-                    end)
-                end
+                if PanelState.SettingsTabContent then PanelState.SettingsTabContent.Visible = false end
                 Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             end
@@ -3422,12 +3173,7 @@ function MagicTulevo:CreateWindow(config)
             -- Hide Info if open
             if PanelState.InfoOpen then
                 PanelState.InfoOpen = false
-                if PanelState.InfoTabContent then 
-                    Tween(PanelState.InfoTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.InfoTabContent then PanelState.InfoTabContent.Visible = false end
-                    end)
-                end
+                if PanelState.InfoTabContent then PanelState.InfoTabContent.Visible = false end
                 Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
             end
@@ -3435,40 +3181,28 @@ function MagicTulevo:CreateWindow(config)
             -- Hide Configs if open
             if PanelState.ConfigsOpen then
                 PanelState.ConfigsOpen = false
-                if PanelState.ConfigsTabContent then 
-                    Tween(PanelState.ConfigsTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
-                    end)
-                end
+                if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
                 Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             end
             
-            -- Show Account tab with full animation
+            -- Show Account tab
             if PanelState.AccountTabContent then
                 PanelState.AccountTabContent.Visible = true
-                PanelState.AccountTabContent.Position = UDim2.new(0.1, 0, 0, 0)
-                PanelState.AccountTabContent.CanvasPosition = Vector2.new(0, 0)
-                
-                Tween(PanelState.AccountTabContent, 0.4, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
+                PanelState.AccountTabContent.Position = UDim2.new(0.05, 0, 0, 0)
+                Tween(PanelState.AccountTabContent, 0.35, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
             end
             Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Accent})
         else
-            -- Hide Account tab with animation
+            -- Hide Account tab and show first user tab
             if PanelState.AccountTabContent then
-                Tween(PanelState.AccountTabContent, 0.25, {Position = UDim2.new(0.05, 0, 0, 0)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-                task.delay(0.25, function()
-                    if PanelState.AccountTabContent then PanelState.AccountTabContent.Visible = false end
-                end)
+                PanelState.AccountTabContent.Visible = false
             end
             Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
             
-            task.delay(0.25, function()
-                if Window.Tabs[1] then
-                    Window.Tabs[1]:Select()
-                end
-            end)
+            if Window.Tabs[1] then
+                Window.Tabs[1]:Select()
+            end
         end
     end)
 
@@ -3494,7 +3228,7 @@ function MagicTulevo:CreateWindow(config)
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Position = UDim2.new(0, 0, 0, 0),
-        CanvasSize = UDim2.new(0, 0, 0, 800),
+        CanvasSize = UDim2.new(0, 0, 0, 750),
         ScrollBarThickness = 3,
         ScrollBarImageColor3 = Theme.Accent,
         ScrollBarImageTransparency = 0.3,
@@ -3529,7 +3263,10 @@ function MagicTulevo:CreateWindow(config)
         Parent = SettingsHeaderFrame
     })
     
-    -- OPTIMIZED: Removed settings gear rotation animation for better startup performance
+    -- Settings gear rotation animation (uses consolidated animation loop)
+    if MagicTulevo.AnimationSettings.EnableAnimations then
+        RegisterRotationAnimation(SettingsHeaderIcon, 30)
+    end
     
     Create("TextLabel", {
         BackgroundTransparency = 1,
@@ -3632,6 +3369,120 @@ function MagicTulevo:CreateWindow(config)
         end
     end)
     
+    -- Animation Settings Section Label
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = "ANIMATIONS",
+        TextColor3 = Theme.TextDark,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 2.5,
+        Parent = PanelState.SettingsTabContent
+    })
+    
+    -- Animation Settings Container
+    local AnimSettingsContainer = Create("Frame", {
+        BackgroundColor3 = Theme.Card,
+        Size = UDim2.new(1, 0, 0, 200),
+        LayoutOrder = 2.6,
+        Parent = PanelState.SettingsTabContent
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = AnimSettingsContainer})
+    Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.5, Parent = AnimSettingsContainer})
+    
+    local AnimSettingsLayout = Create("UIListLayout", {
+        Padding = UDim.new(0, 4),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = AnimSettingsContainer
+    })
+    Create("UIPadding", {
+        PaddingTop = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 8),
+        PaddingLeft = UDim.new(0, 8),
+        PaddingRight = UDim.new(0, 8),
+        Parent = AnimSettingsContainer
+    })
+    
+    -- Helper function to create toggle setting
+    local function CreateAnimToggle(name, settingKey, layoutOrder)
+        local ToggleFrame = Create("Frame", {
+            BackgroundColor3 = Theme.Background,
+            Size = UDim2.new(1, 0, 0, 32),
+            LayoutOrder = layoutOrder,
+            Parent = AnimSettingsContainer
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = ToggleFrame})
+        
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -56, 1, 0),
+            Position = UDim2.new(0, 10, 0, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = name,
+            TextColor3 = Theme.Text,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = ToggleFrame
+        })
+        
+        local ToggleBg = Create("Frame", {
+            BackgroundColor3 = MagicTulevo.AnimationSettings[settingKey] and Theme.Accent or Theme.Secondary,
+            Size = UDim2.new(0, 40, 0, 22),
+            Position = UDim2.new(1, -50, 0.5, -11),
+            Parent = ToggleFrame
+        })
+        Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleBg})
+        
+        local ToggleCircle = Create("Frame", {
+            BackgroundColor3 = Theme.Text,
+            Size = UDim2.new(0, 16, 0, 16),
+            Position = MagicTulevo.AnimationSettings[settingKey] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            Parent = ToggleBg
+        })
+        Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleCircle})
+        
+        local ToggleBtn = Create("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = "",
+            Parent = ToggleFrame
+        })
+        
+        ToggleBtn.MouseButton1Click:Connect(function()
+            MagicTulevo.AnimationSettings[settingKey] = not MagicTulevo.AnimationSettings[settingKey]
+            local enabled = MagicTulevo.AnimationSettings[settingKey]
+            
+            if enabled then
+                Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Accent})
+                Tween(ToggleCircle, 0.25, {Position = UDim2.new(1, -19, 0.5, -8)}, Enum.EasingStyle.Back)
+            else
+                Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Secondary})
+                Tween(ToggleCircle, 0.25, {Position = UDim2.new(0, 3, 0.5, -8)}, Enum.EasingStyle.Back)
+            end
+            
+            -- Special handling for gradient animations
+            if settingKey == "EnableGradients" then
+                if enabled then
+                    StartAnimationLoop()
+                else
+                    StopAnimationLoop()
+                end
+            end
+            
+            PlaySound("rbxassetid://6895079853", 0.3)
+        end)
+        
+        return ToggleFrame
+    end
+    
+    CreateAnimToggle("Enable Animations", "EnableAnimations", 1)
+    CreateAnimToggle("Enable Gradients", "EnableGradients", 2)
+    CreateAnimToggle("Enable Hover Effects", "EnableHoverEffects", 3)
+    CreateAnimToggle("Enable Sounds", "EnableSounds", 4)
+    CreateAnimToggle("Enable Particles", "EnableParticles", 5)
+    
     -- Themes Section Label
     Create("TextLabel", {
         BackgroundTransparency = 1,
@@ -3676,7 +3527,10 @@ function MagicTulevo:CreateWindow(config)
         Parent = ShimmerBg
     })
     
-    -- OPTIMIZED: Removed shimmer animation - static background for better performance
+    -- Shimmer animation (uses consolidated animation loop)
+    if MagicTulevo.AnimationSettings.EnableGradients then
+        RegisterGradientAnimation(ShimmerGradient, 0.2)
+    end
     
     local ThemeGrid = Create("ScrollingFrame", {
         BackgroundTransparency = 1,
@@ -3884,198 +3738,6 @@ function MagicTulevo:CreateWindow(config)
             end
         end
     end
-    
-    -- =====================================================
-    -- Animation Settings Section
-    -- =====================================================
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 18),
-        Font = Enum.Font.GothamBold,
-        Text = "ANIMATION SETTINGS",
-        TextColor3 = Theme.TextDark,
-        TextSize = 10,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        LayoutOrder = 5,
-        Parent = PanelState.SettingsTabContent
-    })
-    
-    -- Animation Settings Container
-    local AnimSettingsFrame = Create("Frame", {
-        BackgroundColor3 = Theme.Card,
-        Size = UDim2.new(1, 0, 0, 200),
-        LayoutOrder = 6,
-        Parent = PanelState.SettingsTabContent
-    })
-    Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = AnimSettingsFrame})
-    Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.5, Parent = AnimSettingsFrame})
-    
-    local AnimSettingsLayout = Create("UIListLayout", {
-        Padding = UDim.new(0, 6),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = AnimSettingsFrame
-    })
-    Create("UIPadding", {
-        PaddingTop = UDim.new(0, 8),
-        PaddingBottom = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 8),
-        PaddingRight = UDim.new(0, 8),
-        Parent = AnimSettingsFrame
-    })
-    
-    -- Enable Animations Toggle
-    local function CreateAnimToggle(name, settingKey, layoutOrder)
-        local ToggleFrame = Create("Frame", {
-            BackgroundColor3 = Theme.Background,
-            Size = UDim2.new(1, 0, 0, 36),
-            LayoutOrder = layoutOrder,
-            Parent = AnimSettingsFrame
-        })
-        Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = ToggleFrame})
-        
-        Create("TextLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, -56, 1, 0),
-            Position = UDim2.new(0, 10, 0, 0),
-            Font = Enum.Font.GothamMedium,
-            Text = name,
-            TextColor3 = Theme.Text,
-            TextSize = 12,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = ToggleFrame
-        })
-        
-        local ToggleBg = Create("Frame", {
-            BackgroundColor3 = MagicTulevo.AnimationSettings[settingKey] and Theme.Accent or Theme.Secondary,
-            Size = UDim2.new(0, 40, 0, 22),
-            Position = UDim2.new(1, -50, 0.5, -11),
-            Parent = ToggleFrame
-        })
-        Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleBg})
-        
-        local ToggleCircle = Create("Frame", {
-            BackgroundColor3 = Theme.Text,
-            Size = UDim2.new(0, 16, 0, 16),
-            Position = MagicTulevo.AnimationSettings[settingKey] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
-            Parent = ToggleBg
-        })
-        Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleCircle})
-        
-        local ToggleBtn = Create("TextButton", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
-            Text = "",
-            Parent = ToggleFrame
-        })
-        
-        ToggleBtn.MouseButton1Click:Connect(function()
-            MagicTulevo.AnimationSettings[settingKey] = not MagicTulevo.AnimationSettings[settingKey]
-            local enabled = MagicTulevo.AnimationSettings[settingKey]
-            
-            if enabled then
-                Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Accent})
-                Tween(ToggleCircle, 0.25, {Position = UDim2.new(1, -19, 0.5, -8)}, Enum.EasingStyle.Back)
-            else
-                Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Secondary})
-                Tween(ToggleCircle, 0.25, {Position = UDim2.new(0, 3, 0.5, -8)}, Enum.EasingStyle.Back)
-            end
-            
-            -- Save settings
-            MagicTulevo.SavedSettings = MagicTulevo.SavedSettings or {}
-            MagicTulevo.SavedSettings.AnimationSettings = MagicTulevo.AnimationSettings
-            SaveSettings(MagicTulevo.SavedSettings)
-        end)
-        
-        return ToggleFrame
-    end
-    
-    CreateAnimToggle("Enable Animations", "EnableAnimations", 1)
-    CreateAnimToggle("Enable Gradients", "EnableGradients", 2)
-    CreateAnimToggle("Enable Glow Effects", "EnableGlow", 3)
-    CreateAnimToggle("Enable Sounds", "EnableSounds", 4)
-    
-    -- Animation Speed Slider
-    local SpeedFrame = Create("Frame", {
-        BackgroundColor3 = Theme.Background,
-        Size = UDim2.new(1, 0, 0, 50),
-        LayoutOrder = 5,
-        Parent = AnimSettingsFrame
-    })
-    Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = SpeedFrame})
-    
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -60, 0, 20),
-        Position = UDim2.new(0, 10, 0, 6),
-        Font = Enum.Font.GothamMedium,
-        Text = "Animation Speed",
-        TextColor3 = Theme.Text,
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = SpeedFrame
-    })
-    
-    local SpeedValue = Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 50, 0, 20),
-        Position = UDim2.new(1, -56, 0, 6),
-        Font = Enum.Font.GothamBold,
-        Text = string.format("%.1fx", MagicTulevo.AnimationSettings.AnimationSpeed),
-        TextColor3 = Theme.Accent,
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        Parent = SpeedFrame
-    })
-    
-    local SpeedBar = Create("Frame", {
-        BackgroundColor3 = Theme.Secondary,
-        Size = UDim2.new(1, -20, 0, 8),
-        Position = UDim2.new(0, 10, 0, 34),
-        Parent = SpeedFrame
-    })
-    Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SpeedBar})
-    
-    local SpeedFill = Create("Frame", {
-        BackgroundColor3 = Theme.Accent,
-        Size = UDim2.new((MagicTulevo.AnimationSettings.AnimationSpeed - 0.5) / 1.5, 0, 1, 0),
-        Parent = SpeedBar
-    })
-    Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SpeedFill})
-    
-    local speedSliding = false
-    SpeedBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            speedSliding = true
-            local pos = math.clamp((input.Position.X - SpeedBar.AbsolutePosition.X) / SpeedBar.AbsoluteSize.X, 0, 1)
-            local value = 0.5 + pos * 1.5
-            MagicTulevo.AnimationSettings.AnimationSpeed = value
-            SpeedValue.Text = string.format("%.1fx", value)
-            Tween(SpeedFill, 0.08, {Size = UDim2.new(pos, 0, 1, 0)})
-        end
-    end)
-    SpeedBar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            speedSliding = false
-            MagicTulevo.SavedSettings = MagicTulevo.SavedSettings or {}
-            MagicTulevo.SavedSettings.AnimationSettings = MagicTulevo.AnimationSettings
-            SaveSettings(MagicTulevo.SavedSettings)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if speedSliding and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local pos = math.clamp((input.Position.X - SpeedBar.AbsolutePosition.X) / SpeedBar.AbsoluteSize.X, 0, 1)
-            local value = 0.5 + pos * 1.5
-            MagicTulevo.AnimationSettings.AnimationSpeed = value
-            SpeedValue.Text = string.format("%.1fx", value)
-            Tween(SpeedFill, 0.08, {Size = UDim2.new(pos, 0, 1, 0)})
-        end
-    end)
-    
-    -- Update SettingsTabContent canvas size
-    SettingsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        PanelState.SettingsTabContent.CanvasSize = UDim2.new(0, 0, 0, SettingsLayout.AbsoluteContentSize.Y + 20)
-    end)
-    PanelState.SettingsTabContent.CanvasSize = UDim2.new(0, 0, 0, SettingsLayout.AbsoluteContentSize.Y + 20)
 
     -- =====================================================
     -- Create Account Tab Content (Player Info)
@@ -4474,8 +4136,34 @@ function MagicTulevo:CreateWindow(config)
         Parent = InfoIconContainer
     })
     
-    -- OPTIMIZED: Removed individual RenderStepped for info icon - static position instead
-    -- Floating animation removed to reduce lag on startup
+    -- Floating animation for Info Header Icon (uses consolidated animation loop)
+    local infoIconBaseY = InfoIconContainer.Position.Y.Offset
+    local infoIconFloatTime = 0
+    local InfoIconFloatConnection = nil
+    
+    local function StartInfoIconFloat()
+        if InfoIconFloatConnection then return end
+        if not MagicTulevo.AnimationSettings.EnableAnimations then return end
+        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        
+        InfoIconFloatConnection = RunService.RenderStepped:Connect(function(dt)
+            if InfoIconContainer and InfoIconContainer.Parent then
+                local speedMult = MagicTulevo.AnimationSettings.AnimationSpeed or 1.0
+                infoIconFloatTime = infoIconFloatTime + dt * 2 * speedMult
+                local floatOffset = math.sin(infoIconFloatTime) * 4
+                InfoIconContainer.Position = UDim2.new(0, 18, 0.5, infoIconBaseY + floatOffset)
+            else
+                if InfoIconFloatConnection then
+                    InfoIconFloatConnection:Disconnect()
+                    InfoIconFloatConnection = nil
+                end
+            end
+        end)
+        table.insert(MagicTulevo.Connections, InfoIconFloatConnection)
+    end
+    
+    -- Start floating animation after delay
+    task.delay(0.8, StartInfoIconFloat)
     
     -- Title and subtitle
     Create("TextLabel", {
@@ -4877,7 +4565,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = LeadDevShimmer
     })
     
-    -- OPTIMIZED: Removed lead dev shimmer animation for better startup performance
+    -- Lead Dev shimmer animation using consolidated animation loop
+    RegisterGradientAnimation(LeadDevShimmerGrad, 0.2)
     
     -- Crown badge for lead dev
     local LeadDevBadge = Create("Frame", {
@@ -5217,16 +4906,11 @@ function MagicTulevo:CreateWindow(config)
     -- Info Button Click Handler
     UI.InfoBtn.MouseButton1Click:Connect(function()
         PanelState.InfoOpen = not PanelState.InfoOpen
-        PlaySound("rbxassetid://6895079853", 0.3)
-        
         if PanelState.InfoOpen then
-            -- Hide other tabs with animation
+            -- Hide other tabs
             for _, t in pairs(Window.Tabs) do
                 if t.Content.Visible then
-                    Tween(t.Content, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        t.Content.Visible = false
-                    end)
+                    t.Content.Visible = false
                     Tween(t.Button, 0.25, {BackgroundTransparency = 1})
                     Tween(t.Label, 0.25, {TextColor3 = Theme.TextMuted})
                     Tween(t.Indicator, 0.25, {Size = UDim2.new(0, 3, 0, 0)})
@@ -5239,12 +4923,7 @@ function MagicTulevo:CreateWindow(config)
             -- Hide Settings if open
             if PanelState.SettingsOpen then
                 PanelState.SettingsOpen = false
-                if PanelState.SettingsTabContent then
-                    Tween(PanelState.SettingsTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.SettingsTabContent then PanelState.SettingsTabContent.Visible = false end
-                    end)
-                end
+                PanelState.SettingsTabContent.Visible = false
                 Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
             end
@@ -5253,10 +4932,7 @@ function MagicTulevo:CreateWindow(config)
             if PanelState.ConfigsOpen then
                 PanelState.ConfigsOpen = false
                 if PanelState.ConfigsTabContent then
-                    Tween(PanelState.ConfigsTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.ConfigsTabContent then PanelState.ConfigsTabContent.Visible = false end
-                    end)
+                    PanelState.ConfigsTabContent.Visible = false
                 end
                 Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
                 Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted})
@@ -5266,51 +4942,26 @@ function MagicTulevo:CreateWindow(config)
             if PanelState.AccountOpen then
                 PanelState.AccountOpen = false
                 if PanelState.AccountTabContent then
-                    Tween(PanelState.AccountTabContent, 0.2, {Position = UDim2.new(0.05, 0, 0, 0)})
-                    task.delay(0.2, function()
-                        if PanelState.AccountTabContent then PanelState.AccountTabContent.Visible = false end
-                    end)
+                    PanelState.AccountTabContent.Visible = false
                 end
-                if PanelState.AccountPanel then
-                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
-                end
+                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
             end
             
-            -- Show Info tab with full animation
-            if PanelState.InfoTabContent then
-                PanelState.InfoTabContent.Visible = true
-                PanelState.InfoTabContent.Position = UDim2.new(0.1, 0, 0, 0)
-                PanelState.InfoTabContent.CanvasPosition = Vector2.new(0, 0)
-                
-                Tween(PanelState.InfoTabContent, 0.4, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
-            end
-            
-            -- Button active state with bounce
+            -- Show Info tab
+            PanelState.InfoTabContent.Visible = true
+            PanelState.InfoTabContent.Position = UDim2.new(0.05, 0, 0, 0)
+            Tween(PanelState.InfoTabContent, 0.35, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
             Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Accent})
             Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.Text})
-            if MagicTulevo.AnimationSettings.EnableAnimations then
-                Tween(UI.InfoIcon, 0.15, {TextSize = 20}, Enum.EasingStyle.Back)
-                task.delay(0.15, function()
-                    Tween(UI.InfoIcon, 0.2, {TextSize = 16}, Enum.EasingStyle.Back)
-                end)
-            end
         else
-            -- Hide Info tab with animation
-            if PanelState.InfoTabContent then
-                Tween(PanelState.InfoTabContent, 0.25, {Position = UDim2.new(0.05, 0, 0, 0)}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-                task.delay(0.25, function()
-                    if PanelState.InfoTabContent then PanelState.InfoTabContent.Visible = false end
-                end)
-            end
+            -- Hide Info tab and show first user tab
+            PanelState.InfoTabContent.Visible = false
             Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
             Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
-            
             -- Select first tab if exists
-            task.delay(0.25, function()
-                if #Window.Tabs > 0 then
-                    Window.Tabs[1]:Select()
-                end
-            end)
+            if #Window.Tabs > 0 then
+                Window.Tabs[1]:Select()
+            end
         end
     end)
 
@@ -5624,9 +5275,7 @@ function MagicTulevo:CreateWindow(config)
                 if PanelState.AccountTabContent then
                     PanelState.AccountTabContent.Visible = false
                 end
-                if PanelState.AccountPanel then
-                    Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
-                end
+                Tween(PanelState.AccountPanel, 0.2, {BackgroundColor3 = Theme.Card})
             end
             
             for _, t in pairs(Window.Tabs) do
@@ -6302,10 +5951,13 @@ end
 
 -- Full cleanup function
 function MagicTulevo:Destroy()
-    -- Save settings before destroying
-    if MagicTulevo.SavedSettings then
-        MagicTulevo.SavedSettings.AnimationSettings = MagicTulevo.AnimationSettings
-        SaveSettings(MagicTulevo.SavedSettings)
+    -- Save settings
+    if #MagicTulevo.Windows > 0 then
+        local settingsToSave = {
+            ThemeIndex = 1,
+            ToggleKey = MagicTulevo.ToggleKey.Name
+        }
+        SaveSettings(settingsToSave)
     end
     
     -- OPTIMIZED: Stop consolidated animation loop
@@ -6314,31 +5966,25 @@ function MagicTulevo:Destroy()
     -- Stop all sounds
     for _, sound in pairs(SoundService:GetChildren()) do
         if sound:IsA("Sound") then
-            pcall(function()
-                sound:Stop()
-                sound:Destroy()
-            end)
+            sound:Stop()
+            sound:Destroy()
         end
     end
     
     -- Disconnect all connections
     for _, conn in pairs(MagicTulevo.Connections) do
-        pcall(function()
-            if conn and conn.Connected then
-                conn:Disconnect()
-            end
-        end)
+        if conn and conn.Connected then
+            conn:Disconnect()
+        end
     end
     MagicTulevo.Connections = {}
     
-    -- Clear object pools
+    -- OPTIMIZED: Clear object pools
     for poolName, pool in pairs(ObjectPool) do
         for _, obj in pairs(pool) do
-            pcall(function()
-                if obj and obj.Parent then
-                    obj:Destroy()
-                end
-            end)
+            if obj and obj.Parent then
+                obj:Destroy()
+            end
         end
         ObjectPool[poolName] = {}
     end
@@ -6346,26 +5992,15 @@ function MagicTulevo:Destroy()
     -- Clear TweenInfo cache
     CustomTweenCache = {}
     
-    -- Clear animation queue
-    AnimationQueue.GradientOffsets = {}
-    AnimationQueue.Rotations = {}
-    AnimationQueue.Active = false
-    
-    -- Clear theme callbacks
-    MagicTulevo.OnThemeChangeCallbacks = {}
-    
     -- Destroy all GUIs
     for _, gui in pairs(CoreGui:GetChildren()) do
         if gui.Name:find("MagicTulevo") then
-            pcall(function() gui:Destroy() end)
+            gui:Destroy()
         end
     end
     
-    -- Reset state
     MagicTulevo.Windows = {}
-    MagicTulevo.Sounds = {}
-    
-    print("[MagicTulevo] Menu fully destroyed - ready for re-execution")
+    print("...")
 end
 
 return MagicTulevo
