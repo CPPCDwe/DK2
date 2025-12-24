@@ -4,6 +4,9 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 
+-- ═══════════════════════════════════════════════════════════════
+-- OPTIMIZATION: Cache frequently used functions and values
+-- ═══════════════════════════════════════════════════════════════
 local mathFloor = math.floor
 local mathClamp = math.clamp
 local mathRandom = math.random
