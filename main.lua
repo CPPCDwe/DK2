@@ -2689,6 +2689,19 @@ function MagicTulevo:CreateWindow(config)
     
     local SidePanel, ContentPanel, Divider
     
+    -- Panel state (consolidated to reduce local variables)
+    local PanelState = {
+        SettingsOpen = false,
+        InfoOpen = false,
+        ConfigsOpen = false,
+        AccountOpen = false,
+        SettingsTabContent = nil,
+        InfoTabContent = nil,
+        ConfigsTabContent = nil,
+        AccountTabContent = nil,
+        AccountPanel = nil
+    }
+    
     ApplyTheme = function(themeData)
         -- Update all theme colors
         for key, value in pairs(themeData.Colors) do
@@ -2907,19 +2920,6 @@ function MagicTulevo:CreateWindow(config)
             pcall(callback, Theme.Accent, Theme)
         end
     end
-
-    -- Panel state (consolidated to reduce local variables)
-    local PanelState = {
-        SettingsOpen = false,
-        InfoOpen = false,
-        ConfigsOpen = false,
-        AccountOpen = false,
-        SettingsTabContent = nil,
-        InfoTabContent = nil,
-        ConfigsTabContent = nil,
-        AccountTabContent = nil,
-        AccountPanel = nil
-    }
 
     -- Configs Button Click Handler
     UI.ConfigsBtn.MouseButton1Click:Connect(function()
