@@ -4,31 +4,8 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 
--- ═══════════════════════════════════════════════════════════════
--- OPTIMIZATION: Cache frequently used functions and values
--- ═══════════════════════════════════════════════════════════════
-local mathFloor = math.floor
-local mathClamp = math.clamp
-local mathRandom = math.random
-local mathMax = math.max
-local mathMin = math.min
-local mathAbs = math.abs
-local stringLower = string.lower
-local stringFind = string.find
-local stringSub = string.sub
-local stringMatch = string.match
-local tableInsert = table.insert
-local tableRemove = table.remove
-local tableSort = table.sort
-local Color3FromRGB = Color3.fromRGB
-local UDim2New = UDim2.new
-local UDimNew = UDim.new
-local Vector2New = Vector2.new
-local InstanceNew = Instance.new
-
--- Cleanup existing UI
-for _, gui in ipairs(CoreGui:GetChildren()) do
-    if stringFind(gui.Name, "MagicTulevo") then
+for _, gui in pairs(CoreGui:GetChildren()) do
+    if gui.Name:find("MagicTulevo") then
         gui:Destroy()
     end
 end
@@ -73,7 +50,7 @@ local AnimationQueue = {
 }
 
 local function RegisterGradientAnimation(gradient, speed)
-    AnimationQueue.GradientOffsets[gradient] = {offset = mathRandom(), speed = speed or 0.3}
+    AnimationQueue.GradientOffsets[gradient] = {offset = math.random(), speed = speed or 0.3}
 end
 
 local function UnregisterGradientAnimation(gradient)
@@ -108,7 +85,7 @@ local function StartAnimationLoop()
         for gradient, data in pairs(AnimationQueue.GradientOffsets) do
             if gradient and gradient.Parent then
                 data.offset = (data.offset + updateDt * data.speed) % 1
-                gradient.Offset = Vector2New(data.offset, 0)
+                gradient.Offset = Vector2.new(data.offset, 0)
             else
                 AnimationQueue.GradientOffsets[gradient] = nil
             end
@@ -174,19 +151,16 @@ local function GetPooledObject(className, props)
     local pool = ObjectPool[className .. "s"]
     local obj
     if pool and #pool > 0 then
-        obj = tableRemove(pool)
+        obj = table.remove(pool)
         obj.Visible = true
         obj.Parent = nil
     else
-        obj = InstanceNew(className)
+        obj = Instance.new(className)
     end
-    local parent = props.Parent
-    props.Parent = nil
     for k, v in pairs(props) do
-        obj[k] = v
+        if k ~= "Parent" then obj[k] = v end
     end
-    if parent then obj.Parent = parent end
-    props.Parent = parent
+    if props.Parent then obj.Parent = props.Parent end
     return obj
 end
 
@@ -197,32 +171,32 @@ local function ReturnToPool(obj)
         obj.Visible = false
         obj.Parent = nil
         -- Clear children except UICorner/UIStroke
-        for _, child in ipairs(obj:GetChildren()) do
+        for _, child in pairs(obj:GetChildren()) do
             if not child:IsA("UICorner") and not child:IsA("UIStroke") then
                 child:Destroy()
             end
         end
-        tableInsert(pool, obj)
+        table.insert(pool, obj)
     else
         obj:Destroy()
     end
 end
 
 MagicTulevo.Theme = {
-    Background = Color3FromRGB(13, 13, 18),
-    Secondary = Color3FromRGB(18, 18, 25),
-    Card = Color3FromRGB(24, 24, 34),
-    CardHover = Color3FromRGB(32, 32, 45),
-    Accent = Color3FromRGB(138, 92, 246),
-    AccentDark = Color3FromRGB(108, 62, 216),
-    AccentGlow = Color3FromRGB(168, 122, 255),
-    Text = Color3FromRGB(255, 255, 255),
-    TextMuted = Color3FromRGB(140, 140, 165),
-    TextDark = Color3FromRGB(90, 90, 110),
-    Border = Color3FromRGB(38, 38, 52),
-    Success = Color3FromRGB(34, 197, 94),
-    Error = Color3FromRGB(239, 68, 68),
-    Warning = Color3FromRGB(245, 158, 11)
+    Background = Color3.fromRGB(13, 13, 18),
+    Secondary = Color3.fromRGB(18, 18, 25),
+    Card = Color3.fromRGB(24, 24, 34),
+    CardHover = Color3.fromRGB(32, 32, 45),
+    Accent = Color3.fromRGB(138, 92, 246),
+    AccentDark = Color3.fromRGB(108, 62, 216),
+    AccentGlow = Color3.fromRGB(168, 122, 255),
+    Text = Color3.fromRGB(255, 255, 255),
+    TextMuted = Color3.fromRGB(140, 140, 165),
+    TextDark = Color3.fromRGB(90, 90, 110),
+    Border = Color3.fromRGB(38, 38, 52),
+    Success = Color3.fromRGB(34, 197, 94),
+    Error = Color3.fromRGB(239, 68, 68),
+    Warning = Color3.fromRGB(245, 158, 11)
 }
 
 local Theme = MagicTulevo.Theme
@@ -234,15 +208,15 @@ local MaxPooledSounds = 5
 local function PlaySound(id, vol)
     local s
     if #SoundPool > 0 then
-        s = tableRemove(SoundPool)
+        s = table.remove(SoundPool)
         s.SoundId = id
         s.Volume = vol or 0.5
     else
-        s = InstanceNew("Sound")
+        s = Instance.new("Sound")
         s.SoundId = id
         s.Volume = vol or 0.5
         s.Parent = SoundService
-        local eq = InstanceNew("EqualizerSoundEffect")
+        local eq = Instance.new("EqualizerSoundEffect")
         eq.LowGain = 6
         eq.MidGain = 0
         eq.HighGain = -2
@@ -252,23 +226,20 @@ local function PlaySound(id, vol)
     s.Ended:Once(function()
         s:Stop()
         if #SoundPool < MaxPooledSounds then
-            tableInsert(SoundPool, s)
+            table.insert(SoundPool, s)
         else
             s:Destroy()
         end
     end)
 end
 
--- OPTIMIZED: Create function with property batching and cached Instance.new
+-- OPTIMIZED: Create function with property batching
 local function Create(class, props)
-    local inst = InstanceNew(class)
-    local parent = props.Parent
-    props.Parent = nil
+    local inst = Instance.new(class)
     for k, v in pairs(props) do
-        inst[k] = v
+        if k ~= "Parent" then inst[k] = v end
     end
-    if parent then inst.Parent = parent end
-    props.Parent = parent -- restore for potential reuse
+    if props.Parent then inst.Parent = props.Parent end
     return inst
 end
 
@@ -1219,8 +1190,8 @@ function MagicTulevo:CreateWindow(config)
         
         -- Animate close
         Tween(Main, 0.4, {
-            Size = UDim2New(0, 0, 0, 0),
-            Position = UDim2New(0.5, 0, 0.5, 0),
+            Size = UDim2.new(0, 0, 0, 0),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
             BackgroundTransparency = 1
         }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
         
@@ -1229,7 +1200,7 @@ function MagicTulevo:CreateWindow(config)
             StopAnimationLoop()
             
             -- Stop all sounds
-            for _, sound in ipairs(SoundService:GetChildren()) do
+            for _, sound in pairs(SoundService:GetChildren()) do
                 if sound:IsA("Sound") then
                     sound:Stop()
                     sound:Destroy()
@@ -1237,9 +1208,7 @@ function MagicTulevo:CreateWindow(config)
             end
             
             -- Disconnect all connections
-            local connections = MagicTulevo.Connections
-            for i = 1, #connections do
-                local conn = connections[i]
+            for _, conn in pairs(MagicTulevo.Connections) do
                 if conn and conn.Connected then
                     conn:Disconnect()
                 end
@@ -1248,8 +1217,7 @@ function MagicTulevo:CreateWindow(config)
             
             -- Clear object pools
             for poolName, pool in pairs(ObjectPool) do
-                for i = 1, #pool do
-                    local obj = pool[i]
+                for _, obj in pairs(pool) do
                     if obj and obj.Parent then
                         obj:Destroy()
                     end
@@ -1264,8 +1232,8 @@ function MagicTulevo:CreateWindow(config)
             MagicTulevo.OnThemeChangeCallbacks = {}
             
             -- Destroy all MagicTulevo GUIs (including notifications)
-            for _, gui in ipairs(CoreGui:GetChildren()) do
-                if stringFind(gui.Name, "MagicTulevo") then
+            for _, gui in pairs(CoreGui:GetChildren()) do
+                if gui.Name:find("MagicTulevo") then
                     gui:Destroy()
                 end
             end
@@ -1382,43 +1350,37 @@ function MagicTulevo:CreateWindow(config)
     Window.AllElements = {}
     Window.AllThemes = {} -- Will be populated after themes are created
     
-    -- Smart search function with fuzzy matching (OPTIMIZED: early returns, caching, cached string functions)
+    -- Smart search function with fuzzy matching (OPTIMIZED: early returns and caching)
     local searchCache = {}
-    local searchCacheSize = 0
-    local MAX_CACHE_SIZE = 200
-    
     local function SmartMatch(text, query)
         local cacheKey = text .. "|" .. query
-        local cached = searchCache[cacheKey]
-        if cached then return cached end
+        if searchCache[cacheKey] then return searchCache[cacheKey] end
         
-        local lowerText = stringLower(text)
-        local lowerQuery = stringLower(query)
-        local queryLen = #lowerQuery
-        local textLen = #lowerText
+        local lowerText = text:lower()
+        local lowerQuery = query:lower()
         local result = 0
         
         -- Exact match (highest priority)
         if lowerText == lowerQuery then 
             result = 100
         -- Starts with query (high priority)
-        elseif stringSub(lowerText, 1, queryLen) == lowerQuery then 
+        elseif lowerText:sub(1, #lowerQuery) == lowerQuery then 
             result = 90
         -- Contains query as substring
-        elseif stringFind(lowerText, lowerQuery, 1, true) then 
+        elseif lowerText:find(lowerQuery, 1, true) then 
             result = 70
         else
             -- First letters match (e.g. "dt" matches "Default Theme")
             local firstLetters = lowerText:gsub("%s+", " "):gsub("(%S)%S*%s*", "%1")
-            if stringFind(firstLetters, lowerQuery, 1, true) then 
+            if firstLetters:find(lowerQuery, 1, true) then 
                 result = 60
             else
                 -- Fuzzy match - all query chars appear in order
                 local queryIdx = 1
-                for i = 1, textLen do
-                    if stringSub(lowerText, i, i) == stringSub(lowerQuery, queryIdx, queryIdx) then
+                for i = 1, #lowerText do
+                    if lowerText:sub(i, i) == lowerQuery:sub(queryIdx, queryIdx) then
                         queryIdx = queryIdx + 1
-                        if queryIdx > queryLen then 
+                        if queryIdx > #lowerQuery then 
                             result = 40
                             break
                         end
@@ -1428,7 +1390,7 @@ function MagicTulevo:CreateWindow(config)
                 -- Partial word match (only if no fuzzy match)
                 if result == 0 then
                     for word in lowerText:gmatch("%S+") do
-                        if stringFind(word, lowerQuery, 1, true) then 
+                        if word:find(lowerQuery, 1, true) then 
                             result = 30
                             break
                         end
@@ -1437,10 +1399,9 @@ function MagicTulevo:CreateWindow(config)
             end
         end
         
-        -- Cache result (OPTIMIZED: better cache management)
-        if searchCacheSize < MAX_CACHE_SIZE then
+        -- Cache result (limit cache size)
+        if next(searchCache) == nil or #searchCache < 100 then
             searchCache[cacheKey] = result
-            searchCacheSize = searchCacheSize + 1
         end
         return result
     end
@@ -1450,7 +1411,7 @@ function MagicTulevo:CreateWindow(config)
     local CurrentThemeIndex = 1
     
     local function UpdateSearch(query)
-        -- OPTIMIZED: Use GetChildren once and cache, iterate backwards
+        -- OPTIMIZED: Use GetChildren once and cache
         local children = UI.SearchResults:GetChildren()
         for i = #children, 1, -1 do
             local child = children[i]
@@ -1458,56 +1419,49 @@ function MagicTulevo:CreateWindow(config)
         end
         
         if query == "" then 
-            UI.SearchResults.CanvasSize = UDim2New(0, 0, 0, 0)
+            UI.SearchResults.CanvasSize = UDim2.new(0, 0, 0, 0)
             UI.SearchCounter.Text = ""
             UI.ClearBtn.Visible = false
             return 
         end
         
         UI.ClearBtn.Visible = true
-        local lowerQuery = stringLower(query)
+        local lowerQuery = query:lower()
         
         -- Collect and score all matches (OPTIMIZED: early exit on max matches)
         local matches = {}
-        local matchCount = 0
         local maxMatches = 20 -- Limit total matches to process
         
         -- Search through regular elements
-        local allElements = Window.AllElements
-        for i = 1, #allElements do
-            if matchCount >= maxMatches then break end
-            local element = allElements[i]
+        for _, element in pairs(Window.AllElements) do
+            if #matches >= maxMatches then break end
             local score = SmartMatch(element.Name, lowerQuery)
             if element.TabName then
-                score = mathMax(score, SmartMatch(element.TabName, lowerQuery) * 0.5)
+                score = math.max(score, SmartMatch(element.TabName, lowerQuery) * 0.5)
             end
             if element.Type then
-                score = mathMax(score, SmartMatch(element.Type, lowerQuery) * 0.3)
+                score = math.max(score, SmartMatch(element.Type, lowerQuery) * 0.3)
             end
             if score > 0 then
-                matchCount = matchCount + 1
-                matches[matchCount] = {data = element, score = score, isTheme = false}
+                table.insert(matches, {data = element, score = score, isTheme = false})
             end
         end
         
         -- Search through themes
-        local allThemes = Window.AllThemes
-        for i = 1, #allThemes do
-            if matchCount >= maxMatches then break end
-            local themeData = allThemes[i]
+        for _, themeData in pairs(Window.AllThemes) do
+            if #matches >= maxMatches then break end
             local score = SmartMatch(themeData.Name, lowerQuery)
             -- Boost gradient themes when searching "gradient"
-            if stringFind(lowerQuery, "grad") and themeData.IsGradient then score = score + 50 end
+            if lowerQuery:find("grad") and themeData.IsGradient then score = score + 50 end
             -- Boost christmas themes when searching "christmas" or "holiday"
-            if (stringFind(lowerQuery, "christ") or stringFind(lowerQuery, "holid") or stringFind(lowerQuery, "new") or stringFind(lowerQuery, "winter")) and themeData.IsChristmas then score = score + 50 end
+            if (lowerQuery:find("christ") or lowerQuery:find("holid") or lowerQuery:find("new") or lowerQuery:find("winter")) and themeData.IsChristmas then score = score + 50 end
             if score > 0 then
-                matchCount = matchCount + 1
-                matches[matchCount] = {data = themeData, score = score, isTheme = true}
+                table.insert(matches, {data = themeData, score = score, isTheme = true})
             end
         end
         
         -- Sort by score
-        tableSort(matches, function(a, b) return a.score > b.score end)
+        table.sort(matches, function(a, b) return a.score > b.score end)
         
         local found = 0
         local totalHeight = 0
@@ -1526,8 +1480,8 @@ function MagicTulevo:CreateWindow(config)
             Button = Theme.Accent,
             Toggle = Theme.Success,
             Slider = Theme.Warning,
-            Dropdown = Color3FromRGB(147, 112, 219),
-            Keybind = Color3FromRGB(255, 165, 0),
+            Dropdown = Color3.fromRGB(147, 112, 219),
+            Keybind = Color3.fromRGB(255, 165, 0),
             TextBox = Color3.fromRGB(100, 149, 237)
         }
         
@@ -5145,15 +5099,15 @@ function MagicTulevo:CreateWindow(config)
 
         function Tab:CreateSection(cfg)
             cfg = cfg or {}
-            local Section = Create("Frame", {BackgroundTransparency = 1, Size = UDim2New(1, 0, 0, 22), Parent = TabContent})
-            Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2New(1, -8, 1, 0), Position = UDim2New(0, 4, 0, 0), Font = Enum.Font.GothamBold, Text = stringLower(cfg.Name or "Section"):upper(), TextColor3 = Theme.TextDark, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = Section})
+            local Section = Create("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), Parent = TabContent})
+            Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0, 4, 0, 0), Font = Enum.Font.GothamBold, Text = (cfg.Name or "Section"):upper(), TextColor3 = Theme.TextDark, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = Section})
             return Section
         end
 
         function Tab:CreateLabel(cfg)
             cfg = cfg or {}
-            local Label = Create("Frame", {BackgroundTransparency = 1, Size = UDim2New(1, 0, 0, 18), Parent = TabContent})
-            local LabelText = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2New(1, 0, 1, 0), Font = Enum.Font.Gotham, Text = cfg.Text or "Label", TextColor3 = Theme.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = Label})
+            local Label = Create("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), Parent = TabContent})
+            local LabelText = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Font = Enum.Font.Gotham, Text = cfg.Text or "Label", TextColor3 = Theme.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = Label})
             local obj = {}
             function obj:Set(t) LabelText.Text = t end
             return obj
@@ -5163,8 +5117,8 @@ function MagicTulevo:CreateWindow(config)
             cfg = cfg or {}
             local callback = cfg.Callback or function() end
             local description = cfg.Description or ""
-            local Button = Create("TextButton", {BackgroundColor3 = Theme.Card, Size = UDim2New(1, 0, 0, 36), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Button", TextColor3 = Theme.Text, TextSize = 13, AutoButtonColor = false, Parent = TabContent})
-            Create("UICorner", {CornerRadius = UDimNew(0, 8), Parent = Button})
+            local Button = Create("TextButton", {BackgroundColor3 = Theme.Card, Size = UDim2.new(1, 0, 0, 36), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Button", TextColor3 = Theme.Text, TextSize = 13, AutoButtonColor = false, Parent = TabContent})
+            Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Button})
             Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Button})
             Button.MouseEnter:Connect(function() Tween(Button, 0.2, {BackgroundColor3 = Theme.CardHover}) end)
             Button.MouseLeave:Connect(function() Tween(Button, 0.2, {BackgroundColor3 = Theme.Card}) end)
@@ -5173,7 +5127,7 @@ function MagicTulevo:CreateWindow(config)
                 task.delay(0.15, function() Tween(Button, 0.25, {BackgroundColor3 = Theme.Card, TextColor3 = Theme.Text}) end)
                 callback()
             end)
-            tableInsert(Window.AllElements, {Name = cfg.Name or "Button", Tab = Tab, TabName = Tab.Name, Type = "Button", Description = description, Callback = callback, UIElement = Button})
+            table.insert(Window.AllElements, {Name = cfg.Name or "Button", Tab = Tab, TabName = Tab.Name, Type = "Button", Description = description, Callback = callback, UIElement = Button})
             return Button
         end
 
@@ -5189,31 +5143,31 @@ function MagicTulevo:CreateWindow(config)
             end
             
             local ToggleObj = {Value = default, Name = toggleName}
-            local Toggle = Create("Frame", {BackgroundColor3 = Theme.Card, Size = UDim2New(1, 0, 0, 36), Parent = TabContent})
-            Create("UICorner", {CornerRadius = UDimNew(0, 8), Parent = Toggle})
+            local Toggle = Create("Frame", {BackgroundColor3 = Theme.Card, Size = UDim2.new(1, 0, 0, 36), Parent = TabContent})
+            Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Toggle})
             Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Toggle})
-            Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2New(1, -56, 1, 0), Position = UDim2New(0, 12, 0, 0), Font = Enum.Font.GothamMedium, Text = toggleName, TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = Toggle})
-            local ToggleBg = Create("Frame", {BackgroundColor3 = default and Theme.Accent or Theme.Background, Size = UDim2New(0, 40, 0, 22), Position = UDim2New(1, -52, 0.5, -11), Parent = Toggle})
-            Create("UICorner", {CornerRadius = UDimNew(1, 0), Parent = ToggleBg})
-            local ToggleCircle = Create("Frame", {BackgroundColor3 = Theme.Text, Size = UDim2New(0, 16, 0, 16), Position = default and UDim2New(1, -19, 0.5, -8) or UDim2New(0, 3, 0.5, -8), Parent = ToggleBg})
-            Create("UICorner", {CornerRadius = UDimNew(1, 0), Parent = ToggleCircle})
+            Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -56, 1, 0), Position = UDim2.new(0, 12, 0, 0), Font = Enum.Font.GothamMedium, Text = toggleName, TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = Toggle})
+            local ToggleBg = Create("Frame", {BackgroundColor3 = default and Theme.Accent or Theme.Background, Size = UDim2.new(0, 40, 0, 22), Position = UDim2.new(1, -52, 0.5, -11), Parent = Toggle})
+            Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleBg})
+            local ToggleCircle = Create("Frame", {BackgroundColor3 = Theme.Text, Size = UDim2.new(0, 16, 0, 16), Position = default and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8), Parent = ToggleBg})
+            Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleCircle})
             local function Update()
                 if ToggleObj.Value then
                     Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Accent})
-                    Tween(ToggleCircle, 0.25, {Position = UDim2New(1, -19, 0.5, -8)}, Enum.EasingStyle.Back)
+                    Tween(ToggleCircle, 0.25, {Position = UDim2.new(1, -19, 0.5, -8)}, Enum.EasingStyle.Back)
                 else
                     Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Background})
-                    Tween(ToggleCircle, 0.25, {Position = UDim2New(0, 3, 0.5, -8)}, Enum.EasingStyle.Back)
+                    Tween(ToggleCircle, 0.25, {Position = UDim2.new(0, 3, 0.5, -8)}, Enum.EasingStyle.Back)
                 end
                 callback(ToggleObj.Value)
             end
             ToggleObj.Update = Update
-            local Click = Create("TextButton", {BackgroundTransparency = 1, Size = UDim2New(1, 0, 1, 0), Text = "", Parent = Toggle})
+            local Click = Create("TextButton", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "", Parent = Toggle})
             Click.MouseButton1Click:Connect(function() ToggleObj.Value = not ToggleObj.Value Update() end)
             function ToggleObj:Set(v) ToggleObj.Value = v Update() end
             if default then callback(true) end
-            tableInsert(Window.Toggles, ToggleObj)
-            tableInsert(Window.AllElements, {Name = toggleName, Tab = Tab, TabName = Tab.Name, Type = "Toggle", Description = description, ToggleObj = ToggleObj, UIElement = Toggle})
+            table.insert(Window.Toggles, ToggleObj)
+            table.insert(Window.AllElements, {Name = toggleName, Tab = Tab, TabName = Tab.Name, Type = "Toggle", Description = description, ToggleObj = ToggleObj, UIElement = Toggle})
             return ToggleObj
         end
 
@@ -5223,37 +5177,30 @@ function MagicTulevo:CreateWindow(config)
             local default = cfg.Default or minVal
             local callback = cfg.Callback or function() end
             local SliderObj = {Value = default}
-            local Slider = Create("Frame", {BackgroundColor3 = Theme.Card, Size = UDim2New(1, 0, 0, 50), Parent = TabContent})
-            Create("UICorner", {CornerRadius = UDimNew(0, 8), Parent = Slider})
+            local Slider = Create("Frame", {BackgroundColor3 = Theme.Card, Size = UDim2.new(1, 0, 0, 50), Parent = TabContent})
+            Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = Slider})
             Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = Slider})
-            Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2New(1, -60, 0, 20), Position = UDim2New(0, 12, 0, 6), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Slider", TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = Slider})
-            local SliderValue = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2New(0, 50, 0, 20), Position = UDim2New(1, -58, 0, 6), Font = Enum.Font.GothamBold, Text = tostring(default), TextColor3 = Theme.Accent, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, Parent = Slider})
-            local SliderBar = Create("Frame", {BackgroundColor3 = Theme.Background, Size = UDim2New(1, -24, 0, 8), Position = UDim2New(0, 12, 0, 34), Parent = Slider})
-            Create("UICorner", {CornerRadius = UDimNew(1, 0), Parent = SliderBar})
-            local SliderFill = Create("Frame", {BackgroundColor3 = Theme.Accent, Size = UDim2New((default - minVal) / (maxVal - minVal), 0, 1, 0), Parent = SliderBar})
-            Create("UICorner", {CornerRadius = UDimNew(1, 0), Parent = SliderFill})
+            Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -60, 0, 20), Position = UDim2.new(0, 12, 0, 6), Font = Enum.Font.GothamMedium, Text = cfg.Name or "Slider", TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = Slider})
+            local SliderValue = Create("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(0, 50, 0, 20), Position = UDim2.new(1, -58, 0, 6), Font = Enum.Font.GothamBold, Text = tostring(default), TextColor3 = Theme.Accent, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, Parent = Slider})
+            local SliderBar = Create("Frame", {BackgroundColor3 = Theme.Background, Size = UDim2.new(1, -24, 0, 8), Position = UDim2.new(0, 12, 0, 34), Parent = Slider})
+            Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SliderBar})
+            local SliderFill = Create("Frame", {BackgroundColor3 = Theme.Accent, Size = UDim2.new((default - minVal) / (maxVal - minVal), 0, 1, 0), Parent = SliderBar})
+            Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SliderFill})
             Create("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Theme.AccentDark), ColorSequenceKeypoint.new(1, Theme.Accent)}), Parent = SliderFill})
             local sliding = false
-            local lastSliderUpdate = 0
-            local SLIDER_UPDATE_RATE = 0.016 -- ~60fps throttle for slider
             local function UpdateSlider(input)
-                local now = tick()
-                if now - lastSliderUpdate < SLIDER_UPDATE_RATE then return end
-                lastSliderUpdate = now
-                local pos = mathClamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
-                local value = mathFloor(minVal + (maxVal - minVal) * pos)
-                if SliderObj.Value ~= value then
-                    SliderObj.Value = value
-                    SliderValue.Text = tostring(value)
-                    Tween(SliderFill, 0.08, {Size = UDim2New(pos, 0, 1, 0)})
-                    callback(value)
-                end
+                local pos = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
+                local value = math.floor(minVal + (maxVal - minVal) * pos)
+                SliderObj.Value = value
+                SliderValue.Text = tostring(value)
+                Tween(SliderFill, 0.08, {Size = UDim2.new(pos, 0, 1, 0)})
+                callback(value)
             end
             SliderBar.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then sliding = true UpdateSlider(input) end end)
             SliderBar.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end end)
             UserInputService.InputChanged:Connect(function(input) if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then UpdateSlider(input) end end)
-            function SliderObj:Set(v) local p = (v - minVal) / (maxVal - minVal) SliderObj.Value = v SliderValue.Text = tostring(v) Tween(SliderFill, 0.2, {Size = UDim2New(p, 0, 1, 0)}) end
-            tableInsert(Window.AllElements, {Name = cfg.Name or "Slider", Tab = Tab, TabName = Tab.Name, Type = "Slider", Description = cfg.Description or "", UIElement = Slider})
+            function SliderObj:Set(v) local p = (v - minVal) / (maxVal - minVal) SliderObj.Value = v SliderValue.Text = tostring(v) Tween(SliderFill, 0.2, {Size = UDim2.new(p, 0, 1, 0)}) end
+            table.insert(Window.AllElements, {Name = cfg.Name or "Slider", Tab = Tab, TabName = Tab.Name, Type = "Slider", Description = cfg.Description or "", UIElement = Slider})
             return SliderObj
         end
 
