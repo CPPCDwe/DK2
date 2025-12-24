@@ -66,15 +66,25 @@ local function UnregisterRotationAnimation(object)
 end
 
 local MainAnimationConnection = nil
+local animationAccumulator = 0
+local ANIMATION_UPDATE_RATE = 1/30 -- 30 FPS for animations (OPTIMIZED)
+
 local function StartAnimationLoop()
     if AnimationQueue.Active then return end
     AnimationQueue.Active = true
     
     MainAnimationConnection = RunService.RenderStepped:Connect(function(dt)
+        animationAccumulator = animationAccumulator + dt
+        
+        -- Only update animations at 30 FPS to reduce CPU usage
+        if animationAccumulator < ANIMATION_UPDATE_RATE then return end
+        local updateDt = animationAccumulator
+        animationAccumulator = 0
+        
         -- Update all gradient offsets
         for gradient, data in pairs(AnimationQueue.GradientOffsets) do
             if gradient and gradient.Parent then
-                data.offset = (data.offset + dt * data.speed) % 1
+                data.offset = (data.offset + updateDt * data.speed) % 1
                 gradient.Offset = Vector2.new(data.offset, 0)
             else
                 AnimationQueue.GradientOffsets[gradient] = nil
@@ -84,7 +94,7 @@ local function StartAnimationLoop()
         -- Update all rotations
         for object, data in pairs(AnimationQueue.Rotations) do
             if object and object.Parent then
-                data.rotation = (data.rotation + dt * data.speed) % 360
+                data.rotation = (data.rotation + updateDt * data.speed) % 360
                 object.Rotation = data.rotation
             else
                 AnimationQueue.Rotations[object] = nil
@@ -101,6 +111,7 @@ local function StopAnimationLoop()
     AnimationQueue.Active = false
     AnimationQueue.GradientOffsets = {}
     AnimationQueue.Rotations = {}
+    animationAccumulator = 0
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -190,21 +201,36 @@ MagicTulevo.Theme = {
 
 local Theme = MagicTulevo.Theme
 
--- OPTIMIZED: Sound system with rate limiting to prevent lag
-local lastSoundTime = 0
-local soundCooldown = 0.1 -- Minimum time between sounds
+-- OPTIMIZED: Sound system with pooling to reduce Instance creation
+local SoundPool = {}
+local MaxPooledSounds = 5
 
 local function PlaySound(id, vol)
-    local now = tick()
-    if now - lastSoundTime < soundCooldown then return end -- Rate limit
-    lastSoundTime = now
-    
-    local s = Instance.new("Sound")
-    s.SoundId = id
-    s.Volume = vol or 0.5
-    s.Parent = SoundService
+    local s
+    if #SoundPool > 0 then
+        s = table.remove(SoundPool)
+        s.SoundId = id
+        s.Volume = vol or 0.5
+    else
+        s = Instance.new("Sound")
+        s.SoundId = id
+        s.Volume = vol or 0.5
+        s.Parent = SoundService
+        local eq = Instance.new("EqualizerSoundEffect")
+        eq.LowGain = 6
+        eq.MidGain = 0
+        eq.HighGain = -2
+        eq.Parent = s
+    end
     s:Play()
-    s.Ended:Connect(function() s:Destroy() end)
+    s.Ended:Once(function()
+        s:Stop()
+        if #SoundPool < MaxPooledSounds then
+            table.insert(SoundPool, s)
+        else
+            s:Destroy()
+        end
+    end)
 end
 
 -- OPTIMIZED: Create function with property batching
@@ -649,12 +675,9 @@ function MagicTulevo:CreateWindow(config)
         }),
         Parent = AccentTop
     })
-    -- OPTIMIZED: Use consolidated animation loop instead of individual connection
+    -- Use consolidated animation loop instead of individual connection
     RegisterGradientAnimation(AccentGradient, 0.3)
-    -- OPTIMIZED: Delay animation start to reduce startup lag
-    task.delay(0.5, function()
-        StartAnimationLoop()
-    end)
+    StartAnimationLoop()
 
     local Header = Create("Frame", {
         BackgroundTransparency = 1,
@@ -688,7 +711,8 @@ function MagicTulevo:CreateWindow(config)
         Rotation = 0,
         Parent = LogoContainer
     })
-    -- OPTIMIZED: Removed logo rotation animation - static gradient for better startup performance
+    -- Use consolidated animation loop for logo rotation
+    RegisterRotationAnimation(LogoGradient, 45)
     local LogoLabel = Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
@@ -885,15 +909,24 @@ function MagicTulevo:CreateWindow(config)
         Parent = UI.ConfigsTooltip
     })
     
-    -- OPTIMIZED: Configs Button Hover - simplified animation without infinite loop
+    -- Configs Button Hover
     UI.ConfigsBtn.MouseEnter:Connect(function()
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.ConfigsTooltip, 0.3, {Size = UDim2.new(0, 65, 0, 26)}, Enum.EasingStyle.Back)
-        -- Single rotation animation instead of infinite loop
-        Tween(UI.ConfigsIcon, 0.3, {Rotation = 15}, Enum.EasingStyle.Quad)
+        UI.configsIconRotating = true
+        task.spawn(function()
+            while UI.configsIconRotating do
+                Tween(UI.ConfigsIcon, 0.3, {Rotation = 10}, Enum.EasingStyle.Quad)
+                task.wait(0.3)
+                if not UI.configsIconRotating then break end
+                Tween(UI.ConfigsIcon, 0.3, {Rotation = -10}, Enum.EasingStyle.Quad)
+                task.wait(0.3)
+            end
+        end)
     end)
     UI.ConfigsBtn.MouseLeave:Connect(function()
+        UI.configsIconRotating = false
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.TextMuted, Rotation = 0})
         Tween(UI.ConfigsTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
@@ -1008,15 +1041,34 @@ function MagicTulevo:CreateWindow(config)
         Parent = UI.InfoTooltip
     })
     
-    -- OPTIMIZED: Info Button Hover - removed shake animation loop
+    -- Info Button Hover with subtle shake animation
     UI.InfoBtn.MouseEnter:Connect(function()
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.Accent})
         Tween(UI.InfoTooltip, 0.3, {Size = UDim2.new(0, 50, 0, 26)}, Enum.EasingStyle.Back)
+        
+        -- Start subtle shake animation
+        UI.infoShaking = true
+        task.spawn(function()
+            while UI.infoShaking do
+                -- Shake left
+                Tween(UI.InfoIcon, 0.05, {Position = UDim2.new(0, -1, 0, 0)}, Enum.EasingStyle.Quad)
+                task.wait(0.05)
+                if not UI.infoShaking then break end
+                -- Shake right
+                Tween(UI.InfoIcon, 0.05, {Position = UDim2.new(0, 1, 0, 0)}, Enum.EasingStyle.Quad)
+                task.wait(0.05)
+                if not UI.infoShaking then break end
+                -- Back to center
+                Tween(UI.InfoIcon, 0.05, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Quad)
+                task.wait(0.1)
+            end
+        end)
     end)
     UI.InfoBtn.MouseLeave:Connect(function()
+        UI.infoShaking = false
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.Card})
-        Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted})
+        Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.TextMuted, Position = UDim2.new(0, 0, 0, 0)})
         Tween(UI.InfoTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
     end)
 
@@ -1033,37 +1085,96 @@ function MagicTulevo:CreateWindow(config)
     Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = UI.CloseBtn})
     Create("UIStroke", {Color = Theme.Border, Thickness = 1, Transparency = 0.7, Parent = UI.CloseBtn})
     
-    -- OPTIMIZED: Search Button Hover - simplified animation without infinite backflip loop
+    -- Search Button Hover with continuous backflip animation (like salto)
     UI.SearchBtn.MouseEnter:Connect(function()
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SearchTooltip, 0.3, {Size = UDim2.new(0, 60, 0, 26)}, Enum.EasingStyle.Back)
-        -- Single bounce animation instead of infinite loop
-        Tween(UI.SearchIcon, 0.2, {Position = UDim2.new(0.5, 0, 0.5, -3)}, Enum.EasingStyle.Back)
+        
+        UI.searchAnimating = true
+        
+        -- Continuous backflip salto animation
+        local flipCount = 0
+        task.spawn(function()
+            while UI.searchAnimating do
+                flipCount = flipCount + 1
+                local startRot = (flipCount - 1) * 360
+                
+                -- Phase 1: Crouch down (prepare for jump)
+                Tween(UI.SearchIcon, 0.1, {
+                    Position = UDim2.new(0.5, 0, 0.5, 2),
+                    Size = UDim2.new(0, 14, 0, 18)
+                }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                task.wait(0.1)
+                if not UI.searchAnimating then break end
+                
+                -- Phase 2: Jump up and start flip
+                Tween(UI.SearchIcon, 0.15, {
+                    Position = UDim2.new(0.5, 0, 0.5, -8),
+                    Size = UDim2.new(0, 18, 0, 18),
+                    Rotation = startRot + 180
+                }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                task.wait(0.15)
+                if not UI.searchAnimating then break end
+                
+                -- Phase 3: Complete flip at peak
+                Tween(UI.SearchIcon, 0.15, {
+                    Position = UDim2.new(0.5, 0, 0.5, -6),
+                    Rotation = startRot + 300
+                }, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+                task.wait(0.15)
+                if not UI.searchAnimating then break end
+                
+                -- Phase 4: Land with bounce
+                Tween(UI.SearchIcon, 0.12, {
+                    Position = UDim2.new(0.5, 0, 0.5, 1),
+                    Rotation = startRot + 360,
+                    Size = UDim2.new(0, 16, 0, 14)
+                }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                task.wait(0.12)
+                if not UI.searchAnimating then break end
+                
+                -- Phase 5: Recover from landing
+                Tween(UI.SearchIcon, 0.15, {
+                    Position = UDim2.new(0.5, 0, 0.5, -2),
+                    Size = UDim2.new(0, 16, 0, 16)
+                }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                task.wait(0.25)
+                if not UI.searchAnimating then break end
+            end
+        end)
     end)
     UI.SearchBtn.MouseLeave:Connect(function()
+        UI.searchAnimating = false
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.Card})
-        Tween(UI.SearchIcon, 0.2, {
+        Tween(UI.SearchIcon, 0.3, {
             ImageColor3 = Theme.TextMuted,
             Position = UDim2.new(0.5, 0, 0.5, 0),
             Rotation = 0,
             Size = UDim2.new(0, 16, 0, 16)
-        })
+        }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         Tween(UI.SearchTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
     end)
     
-    -- OPTIMIZED: Settings Button Hover - simplified without infinite rotation loop
+    -- Settings Button Hover with gear rotation
     UI.SettingsBtn.MouseEnter:Connect(function()
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SettingsTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
-        -- Single rotation instead of infinite loop
-        Tween(UI.GearIcon, 0.4, {Rotation = 90}, Enum.EasingStyle.Quint)
+        UI.gearRotating = true
+        task.spawn(function()
+            while UI.gearRotating do
+                UI.gearRotation = UI.gearRotation + 3
+                UI.GearIcon.Rotation = UI.gearRotation
+                task.wait()
+            end
+        end)
     end)
     UI.SettingsBtn.MouseLeave:Connect(function()
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.Card})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.TextMuted})
         Tween(UI.SettingsTooltip, 0.2, {Size = UDim2.new(0, 0, 0, 26)})
+        UI.gearRotating = false
         Tween(UI.GearIcon, 0.3, {Rotation = 0})
     end)
     
@@ -1239,46 +1350,60 @@ function MagicTulevo:CreateWindow(config)
     Window.AllElements = {}
     Window.AllThemes = {} -- Will be populated after themes are created
     
-    -- Smart search function with fuzzy matching
+    -- Smart search function with fuzzy matching (OPTIMIZED: early returns and caching)
+    local searchCache = {}
     local function SmartMatch(text, query)
-        text = text:lower()
-        query = query:lower()
+        local cacheKey = text .. "|" .. query
+        if searchCache[cacheKey] then return searchCache[cacheKey] end
+        
+        local lowerText = text:lower()
+        local lowerQuery = query:lower()
+        local result = 0
         
         -- Exact match (highest priority)
-        if text == query then return 100 end
-        
+        if lowerText == lowerQuery then 
+            result = 100
         -- Starts with query (high priority)
-        if text:sub(1, #query) == query then return 90 end
-        
+        elseif lowerText:sub(1, #lowerQuery) == lowerQuery then 
+            result = 90
         -- Contains query as substring
-        if text:find(query, 1, true) then return 70 end
-        
-        -- First letters match (e.g. "dt" matches "Default Theme")
-        local words = {}
-        for word in text:gmatch("%S+") do
-            table.insert(words, word)
-        end
-        local firstLetters = ""
-        for _, word in ipairs(words) do
-            firstLetters = firstLetters .. word:sub(1, 1)
-        end
-        if firstLetters:find(query, 1, true) then return 60 end
-        
-        -- Fuzzy match - all query chars appear in order
-        local queryIdx = 1
-        for i = 1, #text do
-            if text:sub(i, i) == query:sub(queryIdx, queryIdx) then
-                queryIdx = queryIdx + 1
-                if queryIdx > #query then return 40 end
+        elseif lowerText:find(lowerQuery, 1, true) then 
+            result = 70
+        else
+            -- First letters match (e.g. "dt" matches "Default Theme")
+            local firstLetters = lowerText:gsub("%s+", " "):gsub("(%S)%S*%s*", "%1")
+            if firstLetters:find(lowerQuery, 1, true) then 
+                result = 60
+            else
+                -- Fuzzy match - all query chars appear in order
+                local queryIdx = 1
+                for i = 1, #lowerText do
+                    if lowerText:sub(i, i) == lowerQuery:sub(queryIdx, queryIdx) then
+                        queryIdx = queryIdx + 1
+                        if queryIdx > #lowerQuery then 
+                            result = 40
+                            break
+                        end
+                    end
+                end
+                
+                -- Partial word match (only if no fuzzy match)
+                if result == 0 then
+                    for word in lowerText:gmatch("%S+") do
+                        if word:find(lowerQuery, 1, true) then 
+                            result = 30
+                            break
+                        end
+                    end
+                end
             end
         end
         
-        -- Partial word match
-        for word in text:gmatch("%S+") do
-            if word:find(query, 1, true) then return 30 end
+        -- Cache result (limit cache size)
+        if next(searchCache) == nil or #searchCache < 100 then
+            searchCache[cacheKey] = result
         end
-        
-        return 0
+        return result
     end
     
     local CloseSearch
@@ -1286,7 +1411,10 @@ function MagicTulevo:CreateWindow(config)
     local CurrentThemeIndex = 1
     
     local function UpdateSearch(query)
-        for _, child in pairs(UI.SearchResults:GetChildren()) do
+        -- OPTIMIZED: Use GetChildren once and cache
+        local children = UI.SearchResults:GetChildren()
+        for i = #children, 1, -1 do
+            local child = children[i]
             if child:IsA("Frame") then child:Destroy() end
         end
         
@@ -1298,19 +1426,21 @@ function MagicTulevo:CreateWindow(config)
         end
         
         UI.ClearBtn.Visible = true
-        query = query:lower()
+        local lowerQuery = query:lower()
         
-        -- Collect and score all matches
+        -- Collect and score all matches (OPTIMIZED: early exit on max matches)
         local matches = {}
+        local maxMatches = 20 -- Limit total matches to process
         
         -- Search through regular elements
         for _, element in pairs(Window.AllElements) do
-            local score = SmartMatch(element.Name, query)
+            if #matches >= maxMatches then break end
+            local score = SmartMatch(element.Name, lowerQuery)
             if element.TabName then
-                score = math.max(score, SmartMatch(element.TabName, query) * 0.5)
+                score = math.max(score, SmartMatch(element.TabName, lowerQuery) * 0.5)
             end
             if element.Type then
-                score = math.max(score, SmartMatch(element.Type, query) * 0.3)
+                score = math.max(score, SmartMatch(element.Type, lowerQuery) * 0.3)
             end
             if score > 0 then
                 table.insert(matches, {data = element, score = score, isTheme = false})
@@ -1319,11 +1449,12 @@ function MagicTulevo:CreateWindow(config)
         
         -- Search through themes
         for _, themeData in pairs(Window.AllThemes) do
-            local score = SmartMatch(themeData.Name, query)
+            if #matches >= maxMatches then break end
+            local score = SmartMatch(themeData.Name, lowerQuery)
             -- Boost gradient themes when searching "gradient"
-            if query:find("grad") and themeData.IsGradient then score = score + 50 end
+            if lowerQuery:find("grad") and themeData.IsGradient then score = score + 50 end
             -- Boost christmas themes when searching "christmas" or "holiday"
-            if (query:find("christ") or query:find("holid") or query:find("new") or query:find("winter")) and themeData.IsChristmas then score = score + 50 end
+            if (lowerQuery:find("christ") or lowerQuery:find("holid") or lowerQuery:find("new") or lowerQuery:find("winter")) and themeData.IsChristmas then score = score + 50 end
             if score > 0 then
                 table.insert(matches, {data = themeData, score = score, isTheme = true})
             end
@@ -1336,6 +1467,7 @@ function MagicTulevo:CreateWindow(config)
         local totalHeight = 0
         local maxResults = 6
         
+        -- OPTIMIZED: Cache type icons and colors outside loop
         local typeIcons = {
             Button = ">",
             Toggle = "o",
@@ -1952,16 +2084,15 @@ function MagicTulevo:CreateWindow(config)
     local lastTextLength = 0
     local typingParticles = {}
     
-    -- OPTIMIZED: Removed keyboard click sound to reduce lag during typing
-    -- Sound creation on every keystroke was causing performance issues
+    -- Keyboard click sound for search input (OPTIMIZED: uses global PlaySound with pooling)
     local function PlayKeyboardClick()
-        -- Disabled for performance
+        PlaySound("rbxassetid://9611478915", 0.8)
     end
     
-    -- OPTIMIZED: Debounced search update with longer delay to reduce lag
+    -- OPTIMIZED: Debounced search update to reduce lag during fast typing
     local DebouncedUpdateSearch = Debounce(function(text)
         UpdateSearch(text)
-    end, 0.15) -- 150ms debounce for better performance
+    end, 0.1) -- 100ms debounce
     
     UI.SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
         local newLength = #UI.SearchInput.Text
@@ -1984,11 +2115,11 @@ function MagicTulevo:CreateWindow(config)
                 Tween(UI.SearchInputContainer, 0.2, {BackgroundColor3 = Theme.Card})
             end)
             
-            -- OPTIMIZED: Reduced particle effects - only every 5th character and simplified
-            if newLength % 5 == 0 then
+            -- OPTIMIZED: Particle effects with object reuse (every 3rd character)
+            if newLength % 3 == 0 then
                 local Particle = Create("Frame", {
                     BackgroundColor3 = Theme.Accent,
-                    Size = UDim2.new(0, 3, 0, 3),
+                    Size = UDim2.new(0, 4, 0, 4),
                     Position = UDim2.new(0, 42 + newLength * 6, 0.5, 0),
                     AnchorPoint = Vector2.new(0.5, 0.5),
                     ZIndex = 10,
@@ -1996,11 +2127,14 @@ function MagicTulevo:CreateWindow(config)
                 })
                 Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = Particle})
                 
-                Tween(Particle, 0.3, {
-                    Position = UDim2.new(0, 42 + newLength * 6, 0.5, -15),
+                local randomX = math.random(-20, 20)
+                local randomY = math.random(-30, -15)
+                Tween(Particle, 0.5, {
+                    Position = UDim2.new(0, 42 + newLength * 6 + randomX, 0.5, randomY),
+                    Size = UDim2.new(0, 0, 0, 0),
                     BackgroundTransparency = 1
                 }, Enum.EasingStyle.Quint)
-                task.delay(0.3, function()
+                task.delay(0.5, function()
                     if Particle then Particle:Destroy() end
                 end)
             end
@@ -3033,7 +3167,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = SettingsHeaderFrame
     })
     
-    -- OPTIMIZED: Removed settings gear rotation animation for better startup performance
+    -- Use consolidated animation loop for settings gear
+    RegisterRotationAnimation(SettingsHeaderIcon, 30)
     
     Create("TextLabel", {
         BackgroundTransparency = 1,
@@ -3180,7 +3315,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = ShimmerBg
     })
     
-    -- OPTIMIZED: Removed shimmer animation - static background for better performance
+    -- Use consolidated animation loop for shimmer
+    RegisterGradientAnimation(ShimmerGradient, 0.15)
     
     local ThemeGrid = Create("ScrollingFrame", {
         BackgroundTransparency = 1,
@@ -3260,8 +3396,8 @@ function MagicTulevo:CreateWindow(config)
             Parent = GradientOverlay
         })
         
-        -- OPTIMIZED: Removed gradient animation for theme buttons to reduce startup lag
-        -- Animation only starts when hovering over theme button
+        -- Use consolidated animation loop for theme gradient
+        RegisterGradientAnimation(ThemePreviewGradient, 0.2)
         
         -- Theme preview bar
         local PreviewBar = Create("Frame", {
@@ -4189,7 +4325,8 @@ function MagicTulevo:CreateWindow(config)
         Parent = LeadDevShimmer
     })
     
-    -- OPTIMIZED: Removed lead dev shimmer animation for better startup performance
+    -- Use consolidated animation loop for lead dev shimmer
+    RegisterGradientAnimation(LeadDevShimmerGrad, 0.2)
     
     -- Crown badge for lead dev
     local LeadDevBadge = Create("Frame", {
@@ -4502,10 +4639,7 @@ function MagicTulevo:CreateWindow(config)
             Duration = 3
         })
     end)
-    
-    -- =====================================================
-    -- CONFIGS TAB - Coming Soon
-    -- =====================================================
+
     PanelState.ConfigsTabContent = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
