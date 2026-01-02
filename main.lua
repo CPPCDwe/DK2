@@ -591,24 +591,7 @@ function MagicTulevo:CreateWindow(config)
     local minSize = config.MinSize or Vector2.new(500, 350)
     local toggleKey = config.ToggleKey or MagicTulevo.ToggleKey
     
-    -- Restore saved window position and size
-    local savedPosition = nil
-    local savedSize = nil
-    if MagicTulevo.SavedSettings then
-        if MagicTulevo.SavedSettings.WindowSize then
-            local ws = MagicTulevo.SavedSettings.WindowSize
-            if ws[1] and ws[2] and ws[1] >= minSize.X and ws[2] >= minSize.Y then
-                savedSize = UDim2.new(0, ws[1], 0, ws[2])
-                size = savedSize
-            end
-        end
-        if MagicTulevo.SavedSettings.WindowPosition then
-            local wp = MagicTulevo.SavedSettings.WindowPosition
-            if wp[1] and wp[2] then
-                savedPosition = UDim2.new(0, wp[1], 0, wp[2])
-            end
-        end
-    end
+
     Window.Visible = true
     Window.Tabs = {}
     Window.Toggles = {}
@@ -638,7 +621,7 @@ function MagicTulevo:CreateWindow(config)
         BackgroundColor3 = Theme.Background,
         Size = UDim2.new(0, 0, 0, 0),
         Position = UDim2.new(0.5, 0, 0.5, 0),
-        AnchorPoint = savedPosition and Vector2.new(0, 0) or Vector2.new(0.5, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
         ClipsDescendants = true,
         Parent = ScreenGui
     })
@@ -6020,6 +6003,119 @@ function MagicTulevo:CreateWindow(config)
     return Window
 end
 
+-- ═══════════════════════════════════════════════════════════════
+-- KEYBIND SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+--[[
+    KeyBind System for Magic Tulevo
+    
+    Usage in main script:
+    
+    local keybind = MagicTulevo:CreateKeybind({
+        Name = "Toggle Feature",
+        Key = Enum.KeyCode.F,
+        Callback = function(isPressed)
+            print("Key pressed:", isPressed)
+        end,
+        OnHold = false, -- true = callback fires while held, false = toggle on press
+    })
+    
+    -- Change key programmatically
+    keybind:SetKey(Enum.KeyCode.G)
+    
+    -- Get current key
+    local currentKey = keybind:GetKey()
+    
+    -- Destroy keybind
+    keybind:Destroy()
+--]]
+
+MagicTulevo.Keybinds = {}
+
+function MagicTulevo:CreateKeybind(config)
+    config = config or {}
+    local keybind = {
+        Name = config.Name or "Keybind",
+        Key = config.Key or Enum.KeyCode.Unknown,
+        Callback = config.Callback or function() end,
+        OnHold = config.OnHold or false,
+        Enabled = true,
+        IsPressed = false,
+        Connection = nil,
+        ReleaseConnection = nil,
+    }
+    
+    -- Input began connection
+    keybind.Connection = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        if not keybind.Enabled then return end
+        if input.KeyCode ~= keybind.Key then return end
+        
+        keybind.IsPressed = true
+        if keybind.Callback then
+            keybind.Callback(true)
+        end
+    end)
+    
+    -- Input ended connection (for hold mode)
+    keybind.ReleaseConnection = UserInputService.InputEnded:Connect(function(input)
+        if input.KeyCode ~= keybind.Key then return end
+        if not keybind.Enabled then return end
+        
+        keybind.IsPressed = false
+        if keybind.OnHold and keybind.Callback then
+            keybind.Callback(false)
+        end
+    end)
+    
+    -- Methods
+    function keybind:SetKey(newKey)
+        self.Key = newKey
+    end
+    
+    function keybind:GetKey()
+        return self.Key
+    end
+    
+    function keybind:SetEnabled(enabled)
+        self.Enabled = enabled
+    end
+    
+    function keybind:Destroy()
+        if self.Connection then
+            self.Connection:Disconnect()
+            self.Connection = nil
+        end
+        if self.ReleaseConnection then
+            self.ReleaseConnection:Disconnect()
+            self.ReleaseConnection = nil
+        end
+        -- Remove from keybinds table
+        for i, kb in ipairs(MagicTulevo.Keybinds) do
+            if kb == self then
+                table.remove(MagicTulevo.Keybinds, i)
+                break
+            end
+        end
+    end
+    
+    table.insert(MagicTulevo.Keybinds, keybind)
+    return keybind
+end
+
+-- Destroy all keybinds
+function MagicTulevo:DestroyAllKeybinds()
+    for _, keybind in ipairs(MagicTulevo.Keybinds) do
+        if keybind.Connection then
+            keybind.Connection:Disconnect()
+        end
+        if keybind.ReleaseConnection then
+            keybind.ReleaseConnection:Disconnect()
+        end
+    end
+    MagicTulevo.Keybinds = {}
+end
+
 -- Full cleanup function
 function MagicTulevo:Destroy()
     -- Save settings
@@ -6033,6 +6129,9 @@ function MagicTulevo:Destroy()
     
     -- OPTIMIZED: Stop consolidated animation loop
     StopAnimationLoop()
+    
+    -- Destroy all keybinds
+    MagicTulevo:DestroyAllKeybinds()
     
     -- Stop all sounds
     for _, sound in pairs(SoundService:GetChildren()) do
