@@ -5,19 +5,19 @@ local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 
 for _, gui in pairs(CoreGui:GetChildren()) do
-    if gui.Name:find("MagicTulevo") then
+    if gui.Name:find("Hiddify") then
         gui:Destroy()
     end
 end
 
-local MagicTulevo = {}
-MagicTulevo.ToggleKey = Enum.KeyCode.K
-MagicTulevo.OnThemeChangeCallbacks = {}
+local Hiddify = {}
+Hiddify.ToggleKey = Enum.KeyCode.K
+Hiddify.OnThemeChangeCallbacks = {}
 
 -- ═══════════════════════════════════════════════════════════════
 -- ANIMATION SETTINGS (User configurable)
 -- ═══════════════════════════════════════════════════════════════
-MagicTulevo.AnimationSettings = {
+Hiddify.AnimationSettings = {
     EnableAnimations = true,      -- Master toggle for all animations
     EnableGradients = true,       -- Animated gradients
     EnableHoverEffects = true,    -- Hover animations on buttons
@@ -80,12 +80,12 @@ end
 local MainAnimationConnection = nil
 local function StartAnimationLoop()
     if AnimationQueue.Active then return end
-    if not MagicTulevo.AnimationSettings.EnableAnimations then return end
-    if not MagicTulevo.AnimationSettings.EnableGradients then return end
+    if not Hiddify.AnimationSettings.EnableAnimations then return end
+    if not Hiddify.AnimationSettings.EnableGradients then return end
     AnimationQueue.Active = true
     
     MainAnimationConnection = RunService.RenderStepped:Connect(function(dt)
-        local speedMult = MagicTulevo.AnimationSettings.AnimationSpeed or 1.0
+        local speedMult = Hiddify.AnimationSettings.AnimationSpeed or 1.0
         
         -- Update all gradient offsets
         for gradient, data in pairs(AnimationQueue.GradientOffsets) do
@@ -187,7 +187,7 @@ local function ReturnToPool(obj)
     end
 end
 
-MagicTulevo.Theme = {
+Hiddify.Theme = {
     Background = Color3.fromRGB(13, 13, 18),
     Secondary = Color3.fromRGB(18, 18, 25),
     Card = Color3.fromRGB(24, 24, 34),
@@ -204,14 +204,14 @@ MagicTulevo.Theme = {
     Warning = Color3.fromRGB(245, 158, 11)
 }
 
-local Theme = MagicTulevo.Theme
+local Theme = Hiddify.Theme
 
 -- OPTIMIZED: Sound system with rate limiting to prevent lag
 local lastSoundTime = 0
 local soundCooldown = 0.1 -- Minimum time between sounds
 
 local function PlaySound(id, vol)
-    if not MagicTulevo.AnimationSettings.EnableSounds then return end -- Check setting
+    if not Hiddify.AnimationSettings.EnableSounds then return end -- Check setting
     local now = tick()
     if now - lastSoundTime < soundCooldown then return end -- Rate limit
     lastSoundTime = now
@@ -275,33 +275,33 @@ end
 
 -- Save/Load System
 local HttpService = game:GetService("HttpService")
-local SaveFileName = "MagicTulevoSettings.json"
+local SaveFileName = "HiddifySettings.json"
 
--- Config Folder System - Uses C:\MagicTulevo\Configs on Windows
-MagicTulevo.ConfigFolderPath = "MagicTulevo/Configs"
-MagicTulevo.ConfigFolderDisplay = "C:\\MagicTulevo\\Configs"
+-- Config Folder System - Uses C:\Hiddify\Configs on Windows
+Hiddify.ConfigFolderPath = "Hiddify/Configs"
+Hiddify.ConfigFolderDisplay = "C:\\Hiddify\\Configs"
 
 -- Initialize config folders with proper structure
-MagicTulevo.InitializeConfigFolders = function()
+Hiddify.InitializeConfigFolders = function()
     if makefolder then
         pcall(function()
-            if not isfolder("MagicTulevo") then
-                makefolder("MagicTulevo")
+            if not isfolder("Hiddify") then
+                makefolder("Hiddify")
             end
-            if not isfolder(MagicTulevo.ConfigFolderPath) then
-                makefolder(MagicTulevo.ConfigFolderPath)
+            if not isfolder(Hiddify.ConfigFolderPath) then
+                makefolder(Hiddify.ConfigFolderPath)
             end
         end)
     end
 end
 
 -- Get all config files from folder
-MagicTulevo.GetConfigFiles = function()
+Hiddify.GetConfigFiles = function()
     local configs = {}
     if listfiles and isfolder then
         pcall(function()
-            if isfolder(MagicTulevo.ConfigFolderPath) then
-                local files = listfiles(MagicTulevo.ConfigFolderPath)
+            if isfolder(Hiddify.ConfigFolderPath) then
+                local files = listfiles(Hiddify.ConfigFolderPath)
                 for _, filePath in ipairs(files) do
                     if filePath:match("%.lua$") then
                         local fileName = filePath:match("([^/\\]+)$")
@@ -329,20 +329,20 @@ MagicTulevo.GetConfigFiles = function()
 end
 
 -- Save config to file with full Lua code structure
-MagicTulevo.SaveConfigToFile = function(configName, configData)
+Hiddify.SaveConfigToFile = function(configName, configData)
     if writefile then
         local success = pcall(function()
-            local filePath = MagicTulevo.ConfigFolderPath .. "/" .. configName .. ".lua"
+            local filePath = Hiddify.ConfigFolderPath .. "/" .. configName .. ".lua"
             local dateStr = os.date("%d.%m.%Y %H:%M:%S")
             local settingsJson = HttpService:JSONEncode(configData.Settings or {})
             
             local content = "--[[\n"
-            content = content .. "    MAGIC TULEVO CONFIG\n"
+            content = content .. "    HIDDIFY CONFIG\n"
             content = content .. "    Config Name: " .. configName .. "\n"
             content = content .. "    Created: " .. dateStr .. "\n"
-            content = content .. "    Path: " .. MagicTulevo.ConfigFolderDisplay .. "\\" .. configName .. ".lua\n"
+            content = content .. "    Path: " .. Hiddify.ConfigFolderDisplay .. "\\" .. configName .. ".lua\n"
             content = content .. "--]]\n\n"
-            content = content .. "-- MagicTulevo Configuration File\n"
+            content = content .. "-- Hiddify Configuration File\n"
             content = content .. "-- Do not edit manually unless you know what you're doing\n\n"
             content = content .. "local ConfigData = {\n"
             content = content .. "    _metadata = {\n"
@@ -350,7 +350,7 @@ MagicTulevo.SaveConfigToFile = function(configName, configData)
             content = content .. '        version = "1.0",\n'
             content = content .. '        created = "' .. dateStr .. '",\n'
             content = content .. '        lastModified = "' .. dateStr .. '",\n'
-            content = content .. '        author = "MagicTulevo User"\n'
+            content = content .. '        author = "Hiddify User"\n'
             content = content .. "    },\n"
             content = content .. "    settings = " .. settingsJson .. ",\n"
             content = content .. "    uiState = {\n"
@@ -370,9 +370,9 @@ MagicTulevo.SaveConfigToFile = function(configName, configData)
 end
 
 -- Load config from file
-MagicTulevo.LoadConfigFromFile = function(configName)
+Hiddify.LoadConfigFromFile = function(configName)
     if readfile and isfile then
-        local filePath = MagicTulevo.ConfigFolderPath .. "/" .. configName .. ".lua"
+        local filePath = Hiddify.ConfigFolderPath .. "/" .. configName .. ".lua"
         local success, result = pcall(function()
             if isfile(filePath) then
                 local content = readfile(filePath)
@@ -391,9 +391,9 @@ MagicTulevo.LoadConfigFromFile = function(configName)
 end
 
 -- Delete config file
-MagicTulevo.DeleteConfigFile = function(configName)
+Hiddify.DeleteConfigFile = function(configName)
     if delfile and isfile then
-        local filePath = MagicTulevo.ConfigFolderPath .. "/" .. configName .. ".lua"
+        local filePath = Hiddify.ConfigFolderPath .. "/" .. configName .. ".lua"
         local success = pcall(function()
             if isfile(filePath) then
                 delfile(filePath)
@@ -405,7 +405,7 @@ MagicTulevo.DeleteConfigFile = function(configName)
 end
 
 -- Initialize folders on script start
-MagicTulevo.InitializeConfigFolders()
+Hiddify.InitializeConfigFolders()
 
 local function SaveSettings(data)
     if writefile then
@@ -431,22 +431,22 @@ local function LoadSettings()
 end
 
 -- Global state for cleanup
-MagicTulevo.Connections = {}
-MagicTulevo.Sounds = {}
-MagicTulevo.Windows = {}
-MagicTulevo.SavedSettings = LoadSettings() or {}
+Hiddify.Connections = {}
+Hiddify.Sounds = {}
+Hiddify.Windows = {}
+Hiddify.SavedSettings = LoadSettings() or {}
 
-function MagicTulevo:OnThemeChange(callback)
+function Hiddify:OnThemeChange(callback)
     if type(callback) == "function" then
-        table.insert(MagicTulevo.OnThemeChangeCallbacks, callback)
+        table.insert(Hiddify.OnThemeChangeCallbacks, callback)
     end
 end
 
-function MagicTulevo:GetAccentColor()
+function Hiddify:GetAccentColor()
     return Theme.Accent
 end
 
-function MagicTulevo:Notify(cfg)
+function Hiddify:Notify(cfg)
     cfg = cfg or {}
     local title = cfg.Title or "Notification"
     local message = cfg.Message or ""
@@ -459,9 +459,9 @@ function MagicTulevo:Notify(cfg)
     local icon = typeIcons[notifyType] or "i"
     if typeSounds[notifyType] then PlaySound(typeSounds[notifyType], 0.6) end
 
-    local NotifyGui = CoreGui:FindFirstChild("MagicTulevoNotifications")
+    local NotifyGui = CoreGui:FindFirstChild("HiddifyNotifications")
     if not NotifyGui then
-        NotifyGui = Create("ScreenGui", {Name = "MagicTulevoNotifications", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = CoreGui})
+        NotifyGui = Create("ScreenGui", {Name = "HiddifyNotifications", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = CoreGui})
         local NotifyHolder = Create("Frame", {
             Name = "Holder",
             BackgroundTransparency = 1,
@@ -581,15 +581,15 @@ function MagicTulevo:Notify(cfg)
     end)
 end
 
-function MagicTulevo:CreateWindow(config)
+function Hiddify:CreateWindow(config)
     config = config or {}
     local Window = {}
-    local title = config.Title or "Magic Tulevo"
+    local title = config.Title or "Hiddify"
     local subtitle = config.SubTitle or "Premium UI"
     local logoText = config.Logo or "M"
     local size = config.Size or UDim2.new(0, 620, 0, 420)
     local minSize = config.MinSize or Vector2.new(500, 350)
-    local toggleKey = config.ToggleKey or MagicTulevo.ToggleKey
+    local toggleKey = config.ToggleKey or Hiddify.ToggleKey
     
 
     Window.Visible = true
@@ -600,7 +600,7 @@ function MagicTulevo:CreateWindow(config)
     Window.ToggleKey = toggleKey
 
     local ScreenGui = Create("ScreenGui", {
-        Name = "MagicTulevoUI",
+        Name = "HiddifyUI",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         Parent = CoreGui
@@ -899,12 +899,12 @@ function MagicTulevo:CreateWindow(config)
     
     -- Configs Button Hover - Smooth oscillating rotation
     UI.ConfigsBtn.MouseEnter:Connect(function()
-        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        if not Hiddify.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.ConfigsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.ConfigsIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.ConfigsTooltip, 0.3, {Size = UDim2.new(0, 65, 0, 26)}, Enum.EasingStyle.Back)
         -- Smooth oscillating rotation (pendulum effect)
-        if MagicTulevo.AnimationSettings.EnableAnimations then
+        if Hiddify.AnimationSettings.EnableAnimations then
             UI.configsIconRotating = true
             task.spawn(function()
                 local startTime = tick()
@@ -1035,12 +1035,12 @@ function MagicTulevo:CreateWindow(config)
     
     -- Info Button Hover - Smooth shake animation
     UI.InfoBtn.MouseEnter:Connect(function()
-        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        if not Hiddify.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.InfoBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.InfoIcon, 0.2, {TextColor3 = Theme.Accent})
         Tween(UI.InfoTooltip, 0.3, {Size = UDim2.new(0, 50, 0, 26)}, Enum.EasingStyle.Back)
         -- Smooth shake animation (rotation oscillation)
-        if MagicTulevo.AnimationSettings.EnableAnimations then
+        if Hiddify.AnimationSettings.EnableAnimations then
             UI.infoShaking = true
             task.spawn(function()
                 local startTime = tick()
@@ -1116,7 +1116,7 @@ function MagicTulevo:CreateWindow(config)
     
     -- Minimize Button Hover
     UI.MinimizeBtn.MouseEnter:Connect(function()
-        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        if not Hiddify.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.MinimizeBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.MinimizeIcon, 0.2, {TextColor3 = Theme.Warning})
         Tween(UI.MinimizeTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
@@ -1176,12 +1176,12 @@ function MagicTulevo:CreateWindow(config)
     
     -- Search Button Hover - Clean backflip animation
     UI.SearchBtn.MouseEnter:Connect(function()
-        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        if not Hiddify.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.SearchBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.SearchIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SearchTooltip, 0.3, {Size = UDim2.new(0, 60, 0, 26)}, Enum.EasingStyle.Back)
         -- Clean backflip animation (single 360° rotation)
-        if MagicTulevo.AnimationSettings.EnableAnimations then
+        if Hiddify.AnimationSettings.EnableAnimations then
             UI.searchAnimating = true
             UI.SearchIcon.Rotation = 0
             task.spawn(function()
@@ -1213,12 +1213,12 @@ function MagicTulevo:CreateWindow(config)
     
     -- Settings Button Hover - Smooth gear rotation
     UI.SettingsBtn.MouseEnter:Connect(function()
-        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        if not Hiddify.AnimationSettings.EnableHoverEffects then return end
         Tween(UI.SettingsBtn, 0.2, {BackgroundColor3 = Theme.CardHover})
         Tween(UI.GearIcon, 0.2, {ImageColor3 = Theme.Accent})
         Tween(UI.SettingsTooltip, 0.3, {Size = UDim2.new(0, 70, 0, 26)}, Enum.EasingStyle.Back)
         -- Smooth continuous rotation
-        if MagicTulevo.AnimationSettings.EnableAnimations then
+        if Hiddify.AnimationSettings.EnableAnimations then
             UI.gearRotating = true
             UI.gearRotation = UI.GearIcon.Rotation or 0
             task.spawn(function()
@@ -1270,12 +1270,12 @@ function MagicTulevo:CreateWindow(config)
             end
             
             -- Disconnect all connections
-            for _, conn in pairs(MagicTulevo.Connections) do
+            for _, conn in pairs(Hiddify.Connections) do
                 if conn and conn.Connected then
                     conn:Disconnect()
                 end
             end
-            MagicTulevo.Connections = {}
+            Hiddify.Connections = {}
             
             -- Clear object pools
             for poolName, pool in pairs(ObjectPool) do
@@ -1291,23 +1291,23 @@ function MagicTulevo:CreateWindow(config)
             CustomTweenCache = {}
             
             -- Clear theme callbacks
-            MagicTulevo.OnThemeChangeCallbacks = {}
+            Hiddify.OnThemeChangeCallbacks = {}
             
-            -- Destroy all MagicTulevo GUIs (including notifications)
+            -- Destroy all Hiddify GUIs (including notifications)
             for _, gui in pairs(CoreGui:GetChildren()) do
-                if gui.Name:find("MagicTulevo") then
+                if gui.Name:find("Hiddify") then
                     gui:Destroy()
                 end
             end
             
             -- Clear windows table
-            MagicTulevo.Windows = {}
+            Hiddify.Windows = {}
             
             -- Clear saved settings reference
-            MagicTulevo.SavedSettings = {}
+            Hiddify.SavedSettings = {}
             
             -- Notify user
-            print("[MagicTulevo] Menu fully unhooked and destroyed - all resources cleaned up")
+            print("[Hiddify] Menu fully unhooked and destroyed - all resources cleaned up")
         end)
     end)
     
@@ -2634,8 +2634,8 @@ function MagicTulevo:CreateWindow(config)
         }
     }
     
-    if MagicTulevo.SavedSettings and MagicTulevo.SavedSettings.ThemeIndex then
-        local savedIdx = MagicTulevo.SavedSettings.ThemeIndex
+    if Hiddify.SavedSettings and Hiddify.SavedSettings.ThemeIndex then
+        local savedIdx = Hiddify.SavedSettings.ThemeIndex
         if savedIdx >= 1 and savedIdx <= #AllThemes then
             CurrentThemeIndex = savedIdx
         end
@@ -2778,10 +2778,10 @@ function MagicTulevo:CreateWindow(config)
             })
         end
         
-        MagicTulevo:Notify({Title = "Theme Changed", Message = "Applied: " .. themeData.Name, Type = "Success", Duration = 2})
+        Hiddify:Notify({Title = "Theme Changed", Message = "Applied: " .. themeData.Name, Type = "Success", Duration = 2})
         
         -- Call all registered theme change callbacks
-        for _, callback in ipairs(MagicTulevo.OnThemeChangeCallbacks) do
+        for _, callback in ipairs(Hiddify.OnThemeChangeCallbacks) do
             pcall(callback, Theme.Accent, Theme)
         end
     end
@@ -3251,7 +3251,7 @@ function MagicTulevo:CreateWindow(config)
     })
     
     -- Settings gear rotation animation (uses consolidated animation loop)
-    if MagicTulevo.AnimationSettings.EnableAnimations then
+    if Hiddify.AnimationSettings.EnableAnimations then
         RegisterRotationAnimation(SettingsHeaderIcon, 30)
     end
     
@@ -3415,7 +3415,7 @@ function MagicTulevo:CreateWindow(config)
         })
         
         local ToggleBg = Create("Frame", {
-            BackgroundColor3 = MagicTulevo.AnimationSettings[settingKey] and Theme.Accent or Theme.Secondary,
+            BackgroundColor3 = Hiddify.AnimationSettings[settingKey] and Theme.Accent or Theme.Secondary,
             Size = UDim2.new(0, 40, 0, 22),
             Position = UDim2.new(1, -50, 0.5, -11),
             Parent = ToggleFrame
@@ -3425,7 +3425,7 @@ function MagicTulevo:CreateWindow(config)
         local ToggleCircle = Create("Frame", {
             BackgroundColor3 = Theme.Text,
             Size = UDim2.new(0, 16, 0, 16),
-            Position = MagicTulevo.AnimationSettings[settingKey] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            Position = Hiddify.AnimationSettings[settingKey] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
             Parent = ToggleBg
         })
         Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ToggleCircle})
@@ -3438,8 +3438,8 @@ function MagicTulevo:CreateWindow(config)
         })
         
         ToggleBtn.MouseButton1Click:Connect(function()
-            MagicTulevo.AnimationSettings[settingKey] = not MagicTulevo.AnimationSettings[settingKey]
-            local enabled = MagicTulevo.AnimationSettings[settingKey]
+            Hiddify.AnimationSettings[settingKey] = not Hiddify.AnimationSettings[settingKey]
+            local enabled = Hiddify.AnimationSettings[settingKey]
             
             if enabled then
                 Tween(ToggleBg, 0.25, {BackgroundColor3 = Theme.Accent})
@@ -3515,7 +3515,7 @@ function MagicTulevo:CreateWindow(config)
     })
     
     -- Shimmer animation (uses consolidated animation loop)
-    if MagicTulevo.AnimationSettings.EnableGradients then
+    if Hiddify.AnimationSettings.EnableGradients then
         RegisterGradientAnimation(ShimmerGradient, 0.2)
     end
     
@@ -3997,7 +3997,7 @@ function MagicTulevo:CreateWindow(config)
                 CopyHwidBtn.Text = "📋 Скопировать HWID"
                 Tween(CopyHwidBtn, 0.2, {BackgroundColor3 = Theme.Accent})
             end)
-            MagicTulevo:Notify({Title = "✅ Готово", Message = "HWID скопирован", Type = "Success", Duration = 2})
+            Hiddify:Notify({Title = "✅ Готово", Message = "HWID скопирован", Type = "Success", Duration = 2})
         end
     end)
     
@@ -4130,12 +4130,12 @@ function MagicTulevo:CreateWindow(config)
     
     local function StartInfoIconFloat()
         if InfoIconFloatConnection then return end
-        if not MagicTulevo.AnimationSettings.EnableAnimations then return end
-        if not MagicTulevo.AnimationSettings.EnableHoverEffects then return end
+        if not Hiddify.AnimationSettings.EnableAnimations then return end
+        if not Hiddify.AnimationSettings.EnableHoverEffects then return end
         
         InfoIconFloatConnection = RunService.RenderStepped:Connect(function(dt)
             if InfoIconContainer and InfoIconContainer.Parent then
-                local speedMult = MagicTulevo.AnimationSettings.AnimationSpeed or 1.0
+                local speedMult = Hiddify.AnimationSettings.AnimationSpeed or 1.0
                 infoIconFloatTime = infoIconFloatTime + dt * 2 * speedMult
                 local floatOffset = math.sin(infoIconFloatTime) * 4
                 InfoIconContainer.Position = UDim2.new(0, 18, 0.5, infoIconBaseY + floatOffset)
@@ -4146,7 +4146,7 @@ function MagicTulevo:CreateWindow(config)
                 end
             end
         end)
-        table.insert(MagicTulevo.Connections, InfoIconFloatConnection)
+        table.insert(Hiddify.Connections, InfoIconFloatConnection)
     end
     
     -- Start floating animation after delay
@@ -4158,7 +4158,7 @@ function MagicTulevo:CreateWindow(config)
         Size = UDim2.new(1, -100, 0, 26),
         Position = UDim2.new(0, 88, 0, 20),
         Font = Enum.Font.GothamBlack,
-        Text = "Magic Tulevo",
+        Text = "Hiddify",
         TextColor3 = Theme.Text,
         TextSize = 20,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -4380,7 +4380,7 @@ function MagicTulevo:CreateWindow(config)
                 DiscordCopyBtn.Text = "Join"
                 Tween(DiscordCopyBtn, 0.2, {BackgroundColor3 = Color3.fromRGB(88, 101, 242)})
             end)
-            MagicTulevo:Notify({Title = "Copied!", Message = "Discord link copied to clipboard", Type = "Success", Duration = 2})
+            Hiddify:Notify({Title = "Copied!", Message = "Discord link copied to clipboard", Type = "Success", Duration = 2})
         end
     end)
     DiscordCopyBtn.MouseEnter:Connect(function()
@@ -4489,7 +4489,7 @@ function MagicTulevo:CreateWindow(config)
                 TelegramCopyBtn.Text = "Follow"
                 Tween(TelegramCopyBtn, 0.2, {BackgroundColor3 = Color3.fromRGB(0, 136, 204)})
             end)
-            MagicTulevo:Notify({Title = "Copied!", Message = "Telegram link copied to clipboard", Type = "Success", Duration = 2})
+            Hiddify:Notify({Title = "Copied!", Message = "Telegram link copied to clipboard", Type = "Success", Duration = 2})
         end
     end)
     TelegramCopyBtn.MouseEnter:Connect(function()
@@ -4925,8 +4925,8 @@ function MagicTulevo:CreateWindow(config)
     end)
     GitHubBtn.MouseButton1Click:Connect(function()
         PlaySound("rbxassetid://6895079853", 0.3)
-        setclipboard("https://github.com/TSMOffical/MagicTulevo-UI/")
-        MagicTulevo:Notify({
+        setclipboard("https://github.com/TSMOffical/Hiddify-UI/")
+        Hiddify:Notify({
             Title = "GitHub",
             Message = "Link copied to clipboard!",
             Type = "Success",
@@ -5048,7 +5048,7 @@ function MagicTulevo:CreateWindow(config)
             Main.Position = Main.Position:Lerp(target, 0.2)
         end
     end)
-    table.insert(MagicTulevo.Connections, dragConn)
+    table.insert(Hiddify.Connections, dragConn)
 
     local resizing = false
     local resizeStart, startSize
@@ -5173,7 +5173,7 @@ function MagicTulevo:CreateWindow(config)
     end)
     
     -- Store connection for cleanup
-    table.insert(MagicTulevo.Connections, keyConnection)
+    table.insert(Hiddify.Connections, keyConnection)
 
     Main.Size = UDim2.new(0, 0, 0, 0)
     Main.Position = UDim2.new(0.5, 0, 0.6, 0)
@@ -5188,7 +5188,7 @@ function MagicTulevo:CreateWindow(config)
         }, Enum.EasingStyle.Quint)
         PlaySound("rbxassetid://6895079853", 0.5)
         task.delay(0.4, function()
-            MagicTulevo:Notify({Title = "Magic Tulevo", Message = "UI успешно загружен!", Type = "Success", Duration = 3})
+            Hiddify:Notify({Title = "Hiddify", Message = "UI успешно загружен!", Type = "Success", Duration = 3})
         end)
     end)
 
@@ -5420,8 +5420,8 @@ function MagicTulevo:CreateWindow(config)
             local callback = cfg.Callback or function() end
             local description = cfg.Description or ""
             
-            if MagicTulevo.SavedSettings and MagicTulevo.SavedSettings.Toggles and MagicTulevo.SavedSettings.Toggles[toggleName] ~= nil then
-                default = MagicTulevo.SavedSettings.Toggles[toggleName]
+            if Hiddify.SavedSettings and Hiddify.SavedSettings.Toggles and Hiddify.SavedSettings.Toggles[toggleName] ~= nil then
+                default = Hiddify.SavedSettings.Toggles[toggleName]
             end
             
             local ToggleObj = {Value = default, Name = toggleName}
@@ -5915,7 +5915,7 @@ function MagicTulevo:CreateWindow(config)
     end
     
     -- Add window to global list
-    table.insert(MagicTulevo.Windows, Window)
+    table.insert(Hiddify.Windows, Window)
     
     -- ═══════════════════════════════════════════════════════════════
     -- DYNAMIC WINDOW CUSTOMIZATION METHODS
@@ -6007,11 +6007,11 @@ end
 -- KEYBIND SYSTEM
 -- ═══════════════════════════════════════════════════════════════
 --[[
-    KeyBind System for Magic Tulevo
+    KeyBind System for Hiddify
     
     Usage in main script:
     
-    local keybind = MagicTulevo:CreateKeybind({
+    local keybind = Hiddify:CreateKeybind({
         Name = "Toggle Feature",
         Key = Enum.KeyCode.F,
         Callback = function(isPressed)
@@ -6030,9 +6030,9 @@ end
     keybind:Destroy()
 --]]
 
-MagicTulevo.Keybinds = {}
+Hiddify.Keybinds = {}
 
-function MagicTulevo:CreateKeybind(config)
+function Hiddify:CreateKeybind(config)
     config = config or {}
     local keybind = {
         Name = config.Name or "Keybind",
@@ -6091,21 +6091,21 @@ function MagicTulevo:CreateKeybind(config)
             self.ReleaseConnection = nil
         end
         -- Remove from keybinds table
-        for i, kb in ipairs(MagicTulevo.Keybinds) do
+        for i, kb in ipairs(Hiddify.Keybinds) do
             if kb == self then
-                table.remove(MagicTulevo.Keybinds, i)
+                table.remove(Hiddify.Keybinds, i)
                 break
             end
         end
     end
     
-    table.insert(MagicTulevo.Keybinds, keybind)
+    table.insert(Hiddify.Keybinds, keybind)
     return keybind
 end
 
 -- Destroy all keybinds
-function MagicTulevo:DestroyAllKeybinds()
-    for _, keybind in ipairs(MagicTulevo.Keybinds) do
+function Hiddify:DestroyAllKeybinds()
+    for _, keybind in ipairs(Hiddify.Keybinds) do
         if keybind.Connection then
             keybind.Connection:Disconnect()
         end
@@ -6113,16 +6113,16 @@ function MagicTulevo:DestroyAllKeybinds()
             keybind.ReleaseConnection:Disconnect()
         end
     end
-    MagicTulevo.Keybinds = {}
+    Hiddify.Keybinds = {}
 end
 
 -- Full cleanup function
-function MagicTulevo:Destroy()
+function Hiddify:Destroy()
     -- Save settings
-    if #MagicTulevo.Windows > 0 then
+    if #Hiddify.Windows > 0 then
         local settingsToSave = {
             ThemeIndex = 1,
-            ToggleKey = MagicTulevo.ToggleKey.Name
+            ToggleKey = Hiddify.ToggleKey.Name
         }
         SaveSettings(settingsToSave)
     end
@@ -6131,7 +6131,7 @@ function MagicTulevo:Destroy()
     StopAnimationLoop()
     
     -- Destroy all keybinds
-    MagicTulevo:DestroyAllKeybinds()
+    Hiddify:DestroyAllKeybinds()
     
     -- Stop all sounds
     for _, sound in pairs(SoundService:GetChildren()) do
@@ -6142,12 +6142,12 @@ function MagicTulevo:Destroy()
     end
     
     -- Disconnect all connections
-    for _, conn in pairs(MagicTulevo.Connections) do
+    for _, conn in pairs(Hiddify.Connections) do
         if conn and conn.Connected then
             conn:Disconnect()
         end
     end
-    MagicTulevo.Connections = {}
+    Hiddify.Connections = {}
     
     -- OPTIMIZED: Clear object pools
     for poolName, pool in pairs(ObjectPool) do
@@ -6164,13 +6164,13 @@ function MagicTulevo:Destroy()
     
     -- Destroy all GUIs
     for _, gui in pairs(CoreGui:GetChildren()) do
-        if gui.Name:find("MagicTulevo") then
+        if gui.Name:find("Hiddify") then
             gui:Destroy()
         end
     end
     
-    MagicTulevo.Windows = {}
+    Hiddify.Windows = {}
     print("...")
 end
 
-return MagicTulevo
+return Hiddify
